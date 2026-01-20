@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EHS Мониторинг - Панель Управления</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #1a252f;
+            --accent: #3498db;
+            --bg: #f4f7f6;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        h1 { color: var(--primary); border-bottom: 3px solid var(--accent); padding-bottom: 10px; margin-bottom: 30px; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #2c3e50; color: white; padding: 15px; text-align: left; }
+        td { padding: 15px; border-bottom: 1px solid #eee; }
+        tr:hover { background-color: #f9f9f9; }
+
+        .img-preview { 
+            width: 100px; 
+            height: 70px; 
+            object-fit: cover; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            border: 1px solid #ddd;
+            transition: 0.3s;
+        }
+        .img-preview:hover { transform: scale(1.1); }
+        
+        .badge { 
+            padding: 5px 12px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            font-weight: bold; 
+            color: white; 
+            text-transform: uppercase;
+        }
+        .dept-pb { background: #e74c3c; } /* Пожарная безопасность */
+        .dept-ot { background: #3498db; } /* Охрана труда */
+        .dept-os { background: #2ecc71; } /* Охрана среды */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Журнал нарушений EHS (lordnebes228)</h1>
+    <table id="actsTable">
+        <thead>
+            <tr>
+                <th>Дата и время</th>
+                <th>Инспектор</th>
+                <th>Отдел</th>
+                <th>Место</th>
+                <th>Описание нарушения</th>
+                <th>Фото</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <tr>
+                <td colspan="6" style="text-align:center;">Загрузка данных из Supabase...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Твои данные подключения
+    const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
+
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function loadData() {
+        try {
+            // Запрашиваем данные из таблицы 'acts'
+            const { data, error } = await _supabase
+                .from('acts')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Актов пока нет</td></tr>';
+                return;
+            }
+
+            data.forEach(act => {
+                const date = new Date(act.created_at).toLocaleString('ru-RU');
+                const deptClass = act.department === 'ПБ' ? 'dept-pb' : (act.department === 'ОТ' ? 'dept-ot' : 'dept-os');
+                
+                const row = `
+                    <tr>
+                        <td>${date}</td>
+                        <td><b>${act.inspector || 'Не указан'}</b></td>
+                        <td><span class="badge ${deptClass}">${act.department}</span></td>
+                        <td>${act.location}</td>
+                        <td style="font-size: 0.9em; max-width: 300px;">${act.violation_desc}</td>
+                        <td>
+                            <a href="${act.image_url}" target="_blank">
+                                <img src="${act.image_url}" class="img-preview" alt="Нарушение">
+                            </a>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        } catch (err) {
+            console.error('Ошибка при получении данных:', err);
+            document.getElementById('tableBody').innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">Ошибка: ${err.message}</td></tr>`;
+        }
+    }
+
+    // Загружаем данные при открытии страницы
+    loadData();
+
+    // Обновляем таблицу каждые 10 секунд
+    setInterval(loadData, 10000);
+</script>
+
+</body>
+</html>
