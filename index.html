@@ -71,7 +71,30 @@
             <button onclick="createUser()">Создать пользователя</button>
         </div>
     </div>
+<div id="authSection" style="background: #eee; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+    <h3>Вход в систему управления</h3>
+    <input type="text" id="email" placeholder="Логин (например, admin)">
+    <input type="password" id="password" placeholder="Пароль">
+    <button onclick="signIn()">Войти</button>
+</div>
 
+<script>
+async function signIn() {
+    const login = document.getElementById('email').value;
+    const pass = document.getElementById('password').value;
+    // Добавляем технический хвост, как в приложении
+    const { data, error } = await _supabase.auth.signInWithPassword({
+        email: login + "@ssk.local",
+        password: pass
+    });
+
+    if (error) alert("Ошибка: " + error.message);
+    else {
+        alert("Вы успешно вошли!");
+        location.reload(); // Страница обновится и проверит роль
+    }
+}
+</script>
     <h1>Журнал нарушений EHS</h1>
     <table id="actsTable">
         <thead>
@@ -180,3 +203,4 @@
 
 </body>
 </html>
+
