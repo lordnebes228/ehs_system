@@ -6,41 +6,45 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; }
-        .container { width: 100%; max-width: 1200px; display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
-        .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 350px; text-align: center; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .container { width: 100%; max-width: 1200px; display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); margin-top: 20px; }
+        .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 350px; text-align: center; margin-top: 100px; }
         
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button:hover { background: #2980b9; }
 
         #adminPanel { display: none; background: #eef6fc; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid var(--accent); }
+        .admin-grid { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th { background: var(--primary); color: white; padding: 15px; text-align: left; }
         td { padding: 15px; border-bottom: 1px solid #eee; }
-        .img-preview { width: 100px; height: 70px; object-fit: cover; border-radius: 6px; }
+        .img-preview { width: 100px; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; }
+        .header-box { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent); margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
 <div id="loginForm" class="auth-card">
-    <h2>Вход в EHS</h2>
-    <input type="text" id="userLogin" placeholder="Логин">
+    <h2 style="color: var(--primary)">Вход в систему EHS</h2>
+    <input type="text" id="userLogin" placeholder="Логин (например: admin)">
     <input type="password" id="userPass" placeholder="Пароль">
     <button onclick="signIn()">ВОЙТИ</button>
 </div>
 
 <div id="mainContent" class="container">
     <div id="adminPanel">
-        <h2>Управление пользователями</h2>
-        <input type="text" id="regLogin" placeholder="Логин нового сотрудника">
-        <input type="password" id="regPass" placeholder="Пароль">
-        <label><input type="checkbox" id="regIsAdmin"> Права Админа</label>
-        <button onclick="createUser()" style="width: auto; margin-left: 10px;">Создать аккаунт</button>
+        <h3>Панель администратора: Регистрация инспектора</h3>
+        <div class="admin-grid">
+            <input type="text" id="regLogin" style="width: 200px;" placeholder="Логин">
+            <input type="password" id="regPass" style="width: 200px;" placeholder="Пароль">
+            <button onclick="createUser()" style="width: auto;">Создать аккаунт</button>
+        </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Журнал нарушений</h1>
+    <div class="header-box">
+        <h1>Журнал нарушений EHS</h1>
         <button onclick="signOut()" style="width: auto; background: #95a5a6;">Выйти</button>
     </div>
 
@@ -63,11 +67,11 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 1. Функция входа
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value.trim();
         
+        // Входим используя логин + наш технический домен
         const { data, error } = await _supabase.auth.signInWithPassword({
             email: login + "@ssk.local",
             password: pass
@@ -77,7 +81,6 @@
         else checkSession();
     }
 
-    // 2. Проверка сессии и прав
     async function checkSession() {
         const { data: { user } } = await _supabase.auth.getUser();
         
@@ -86,24 +89,24 @@
             document.getElementById('mainContent').style.display = 'block';
             loadActs();
 
-            // Проверяем, админ ли это
+            // Проверяем права из твоей таблицы profiles
             const { data: profile } = await _supabase
                 .from('profiles')
                 .select('can_manage_users')
                 .eq('id', user.id)
                 .single();
 
-            if (profile && profile.can_manage_users) {
+            if (profile && profile.can_manage_users === true) {
                 document.getElementById('adminPanel').style.display = 'block';
             }
         }
     }
 
-    // 3. Создание новых пользователей (только для админа)
     async function createUser() {
         const login = document.getElementById('regLogin').value.trim();
         const pass = document.getElementById('regPass').value.trim();
-        const isAdmin = document.getElementById('regIsAdmin').checked;
+
+        if(!login || !pass) return alert("Заполните поля!");
 
         const { data, error } = await _supabase.auth.signUp({
             email: login + "@ssk.local",
@@ -112,24 +115,30 @@
 
         if (error) return alert("Ошибка: " + error.message);
 
+        // Создаем запись в твоей таблице profiles
         await _supabase.from('profiles').insert([{
             id: data.user.id,
             username: login,
-            can_manage_users: isAdmin
+            can_manage_users: false, // Обычный инспектор
+            role: 'inspector'
         }]);
 
-        alert("Пользователь создан!");
+        alert("Пользователь " + login + " создан!");
+        document.getElementById('regLogin').value = "";
+        document.getElementById('regPass').value = "";
     }
 
     async function loadActs() {
-        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        if(error) return;
+        
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = data.map(act => `
             <tr>
-                <td>${new Date(act.created_at).toLocaleString()}</td>
-                <td><b>${act.inspector}</b></td>
+                <td style="font-size: 12px;">${new Date(act.created_at).toLocaleString('ru-RU')}</td>
+                <td><b>${act.inspector || 'Инспектор'}</b></td>
                 <td>${act.location}</td>
-                <td>${act.violation_desc}</td>
+                <td style="max-width: 300px; font-size: 14px;">${act.violation_desc}</td>
                 <td><a href="${act.image_url}" target="_blank"><img src="${act.image_url}" class="img-preview"></a></td>
             </tr>
         `).join('');
@@ -140,7 +149,6 @@
         location.reload();
     }
 
-    // Запуск проверки при загрузке страницы
     checkSession();
 </script>
 </body>
