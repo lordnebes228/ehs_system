@@ -12,24 +12,19 @@
         .container { max-width: 1400px; margin: 0 auto; display: none; }
         .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 30px; }
         
-        /* Крупные элементы */
         input, select, button { padding: 15px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
         button { cursor: pointer; font-weight: bold; border: none; transition: 0.2s; }
         
-        /* Кнопка конструктора */
         .setup-btn { background: #8e44ad; color: white; width: 100%; margin-bottom: 25px; font-size: 18px; padding: 20px; }
         .setup-btn:hover { background: #732d91; }
 
-        /* Таблицы */
         .table-wrapper { background: white; border-radius: 12px; overflow-x: auto; border: 1px solid #eee; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th { background: var(--primary); color: white; padding: 18px; text-align: left; }
         td { padding: 18px; border-bottom: 1px solid #eee; }
         tr:hover { background: #fcfcfc; }
 
-        /* Поиск */
         .search-box { background: #fff; border: 2px solid var(--accent); margin-bottom: 15px; }
-
         .auth-card { background: white; padding: 50px; border-radius: 16px; width: 100%; max-width: 450px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
     </style>
 </head>
@@ -114,13 +109,13 @@
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
     let currentUser = null;
-    let allUsers = []; // Для локального поиска
+    let allUsers = []; 
 
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
         const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
-        if (error) alert("Ошибка входа"); else checkSession();
+        if (error) alert("Ошибка входа: " + error.message); else checkSession();
     }
 
     async function checkSession() {
@@ -141,7 +136,45 @@
         loadActs();
     }
 
-    // Загрузка и поиск пользователей
+    // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ ---
+    async function createUser() {
+        const login = document.getElementById('regLogin').value.trim();
+        const pass = document.getElementById('regPass').value;
+        const role = document.getElementById('regRole').value;
+        const dept = document.getElementById('regDept').value;
+
+        if (!login || pass.length < 6) return alert("Введите логин и пароль (минимум 6 символов)!");
+
+        // 1. Создание Auth аккаунта
+        const { data: authData, error: authError } = await _supabase.auth.signUp({
+            email: login + "@ssk.local",
+            password: pass
+        });
+
+        if (authError) return alert("Ошибка регистрации: " + authError.message);
+
+        // 2. Создание профиля в таблице profiles
+        if (authData.user) {
+            const { error: profError } = await _supabase.from('profiles').insert([{
+                id: authData.user.id,
+                username: login,
+                role: role,
+                department: dept,
+                can_use_mobile: true,
+                can_manage_users: (role === 'Администратор')
+            }]);
+
+            if (profError) {
+                alert("Ошибка создания профиля: " + profError.message);
+            } else {
+                alert("Пользователь " + login + " успешно создан!");
+                document.getElementById('regLogin').value = '';
+                document.getElementById('regPass').value = '';
+                loadUsers();
+            }
+        }
+    }
+
     async function loadUsers() {
         const { data } = await _supabase.from('profiles').select('*').order('username');
         allUsers = data || [];
@@ -160,19 +193,24 @@
                 <td><strong>${u.username}</strong></td>
                 <td>${u.role} (${u.department})</td>
                 <td style="text-align:center"><input type="checkbox" style="transform:scale(1.5)" ${u.can_use_mobile ? 'checked' : ''} onchange="updateRight('${u.id}','can_use_mobile',this.checked)"></td>
-                <td><button class="btn-del" onclick="delUser('${u.id}')" style="background:var(--danger); color:white; padding:5px 10px; font-size:12px">Удалить</button></td>
+                <td><button onclick="delUser('${u.id}')" style="background:var(--danger); color:white; padding:5px 10px; font-size:12px; border-radius:4px;">Удалить</button></td>
             </tr>
         `).join('');
     }
 
-    // Поиск и загрузка актов
+    async function delUser(id) {
+        if (!confirm("Удалить этого сотрудника?")) return;
+        const { error } = await _supabase.from('profiles').delete().eq('id', id);
+        if (error) alert("Ошибка при удалении: " + error.message);
+        else loadUsers();
+    }
+
     async function loadActs() {
         const searchTerm = document.getElementById('actSearch').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
 
         let query = _supabase.from('acts').select('*');
         
-        // Базовая фильтрация по ролям
         if (currentUser.role === 'Начальник цеха') query = query.eq('location', currentUser.department);
         else if (currentUser.role === 'Нач. отдела') query = query.eq('created_by_dept', currentUser.department);
 
@@ -186,7 +224,7 @@
             });
 
             document.getElementById('actsTable').innerHTML = filteredData.map(act => `
-                <tr onclick='alert("ID акта: ${act.id}")' style="cursor:pointer">
+                <tr>
                     <td>${new Date(act.created_at).toLocaleDateString()}</td>
                     <td><b>${act.location}</b></td>
                     <td>${act.created_by_dept || '—'}</td>
@@ -199,7 +237,9 @@
 
     async function loadDepartments() {
         const { data } = await _supabase.from('departments').select('*').order('name');
-        document.getElementById('regDept').innerHTML = data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        if (data) {
+            document.getElementById('regDept').innerHTML = data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        }
     }
 
     async function updateRight(id, col, val) {
