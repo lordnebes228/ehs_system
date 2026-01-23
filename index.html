@@ -8,48 +8,62 @@
     <style>
         :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --danger: #e74c3c; --success: #27ae60; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #333; }
+        
+        /* Стили карточки входа */
         .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; margin: 100px auto; }
         input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        
+        /* Основной контейнер */
         .container { max-width: 1300px; margin: 0 auto; display: none; }
+        
+        /* Админка */
         #adminSection { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--accent); margin-bottom: 30px; display: none; }
+        
+        /* Таблицы */
         .table-wrapper { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; margin-top: 20px; }
         table { width: 100%; border-collapse: collapse; }
         th { background: var(--primary); color: white; padding: 12px; text-align: left; font-size: 13px; }
         td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-        tr:hover { background-color: #f9f9f9; }
+        tr:hover { background-color: #f9f9f9; cursor: pointer; }
+
+        /* Кнопки */
         button { padding: 10px 15px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .btn-del { background: var(--danger); padding: 5px 10px; font-size: 12px; }
-        .e-stamp { border: 3px solid var(--success); color: var(--success); padding: 10px; font-weight: bold; display: inline-block; transform: rotate(-3deg); border-radius: 5px; text-transform: uppercase; }
+
+        /* Печатная форма и штампы */
+        .e-stamp { border: 3px solid var(--success); color: var(--success); padding: 10px; font-weight: bold; display: inline-block; transform: rotate(-3deg); border-radius: 5px; text-transform: uppercase; margin-top: 10px; }
         #prescriptionModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; }
-        .paper { background: white; width: 210mm; padding: 50px; margin: 20px auto; font-family: "Times New Roman", serif; color: black; line-height: 1.4; position: relative; }
+        .paper { background: white; width: 210mm; padding: 50px; margin: 20px auto; font-family: "Times New Roman", serif; color: black; line-height: 1.4; position: relative; min-height: 297mm; }
         .no-print { margin-bottom: 20px; display: flex; gap: 10px; }
+        
         @media print { .no-print { display: none; } body { padding: 0; background: white; } .paper { margin: 0; width: 100%; box-shadow: none; } }
     </style>
 </head>
 <body>
 
 <div id="loginForm" class="auth-card">
-    <h2>EHS Мониторинг</h2>
-    <input type="text" id="userLogin" placeholder="Логин">
+    <h2 style="color: var(--primary)">EHS Мониторинг</h2>
+    <input type="text" id="userLogin" placeholder="Логин (например: ivanov)">
     <input type="password" id="userPass" placeholder="Пароль">
-    <button onclick="signIn()" style="width: 100%;">ВОЙТИ</button>
+    <button onclick="signIn()" style="width: 100%; margin-top: 10px;">ВОЙТИ В СИСТЕМУ</button>
 </div>
 
 <div id="mainContent" class="container">
+    
     <div id="adminSection">
-        <h3>Управление структурой (Цехи/Отделы)</h3>
+        <h3 style="margin-top:0">Управление структурой и доступом</h3>
+        
         <div style="display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: #eef2f3; border-radius: 8px;">
-            <input type="text" id="newDeptName" placeholder="Название">
+            <input type="text" id="newDeptName" placeholder="Название нового подразделения">
             <select id="newDeptType" style="width: 150px;">
                 <option value="Цех">Цех</option>
                 <option value="Отдел">Отдел</option>
             </select>
-            <button onclick="addDepartment()" style="background: var(--success)">+ ДОБАВИТЬ</button>
+            <button onclick="addDepartment()" style="background: var(--success)">+ ДОБАВИТЬ ЦЕХ</button>
         </div>
 
-        <h3>Сотрудники</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-            <input type="text" id="regLogin" placeholder="Логин">
+            <input type="text" id="regLogin" placeholder="Логин сотрудника">
             <input type="password" id="regPass" placeholder="Пароль">
             <select id="regRole">
                 <option value="Наблюдатель">Наблюдатель</option>
@@ -58,24 +72,48 @@
                 <option value="Начальник управления">Начальник управления</option>
                 <option value="Администратор">Администратор</option>
             </select>
-            <select id="regDept"></select>
-            <button onclick="createUser()">СОЗДАТЬ</button>
+            <select id="regDept">
+                </select>
+            <button onclick="createUser()">СОЗДАТЬ АККАУНТ</button>
         </div>
+
         <div class="table-wrapper">
             <table>
-                <thead><tr><th>Логин</th><th>Отдел</th><th>Админ</th><th>Подпись</th><th>Удаление</th><th>Отчеты</th><th>Действие</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th>Роль / Подразделение</th>
+                        <th>Админ</th>
+                        <th>Подпись</th>
+                        <th>Удаление</th>
+                        <th>Отчеты</th>
+                        <th>Действие</th>
+                    </tr>
+                </thead>
                 <tbody id="usersList"></tbody>
             </table>
         </div>
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 id="welcomeText">Журнал актов</h2>
-        <button onclick="signOut()" style="background: var(--danger)">ВЫЙТИ</button>
+        <div>
+            <h2 id="welcomeText" style="margin:0">Журнал актов</h2>
+            <small id="userRoleBadge" style="color: var(--accent); font-weight: bold;"></small>
+        </div>
+        <button onclick="signOut()" style="background: var(--danger)">ВЫЙТИ ИЗ СИСТЕМЫ</button>
     </div>
+
     <div class="table-wrapper">
         <table>
-            <thead><tr><th>Дата</th><th>Место</th><th>Нарушение</th><th>Фото</th><th>Статус</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Место (Цех)</th>
+                    <th>Нарушение</th>
+                    <th>Фото</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
             <tbody id="actsTable"></tbody>
         </table>
     </div>
@@ -84,21 +122,35 @@
 <div id="prescriptionModal">
     <div class="paper">
         <div class="no-print">
-            <button onclick="window.print()">ПЕЧАТЬ</button>
-            <button id="signBtn" onclick="applySignature()" style="background: var(--success)">ПОДПИСАТЬ</button>
-            <button onclick="closeModal()">ЗАКРЫТЬ</button>
+            <button onclick="window.print()">ПЕЧАТЬ В PDF</button>
+            <button id="signBtn" onclick="applySignature()" style="background: var(--success)">ПОСТАВИТЬ ПОДПИСЬ</button>
+            <button onclick="closeModal()" style="background: #7f8c8d">ЗАКРЫТЬ</button>
         </div>
+        
         <div style="text-align: center; font-weight: bold; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px;">
-            <p>УПРАВЛЕНИЕ ПБ, ОТ И ОС</p>
-            <p style="font-size: 20px;">ПРЕДПИСАНИЕ № <span id="p-id"></span></p>
+            <p>СУРГУТСКОЕ СЕРВИСНОЕ КОЛОННОЕ (ССК)</p>
+            <p>УПРАВЛЕНИЕ ПРОМЫШЛЕННОЙ БЕЗОПАСНОСТИ, ОХРАНЫ ТРУДА И ОС</p>
+            <p style="font-size: 20px; margin-top: 10px;">ПРЕДПИСАНИЕ № <span id="p-id"></span></p>
         </div>
-        <p>Дата: <span id="p-date"></span></p>
-        <p>Подразделение: <b><span id="p-loc"></span></b></p>
-        <div id="p-text" style="border: 1px solid #ccc; padding: 15px; margin: 20px 0;"></div>
+
+        <p><b>Дата выявления:</b> <span id="p-date"></span></p>
+        <p><b>Место нарушения (Объект):</b> <span id="p-loc"></span></p>
+        
+        <div style="margin-top: 20px;">
+            <b>Описание нарушения:</b>
+            <div id="p-text" style="border: 1px solid #ddd; padding: 15px; margin-top: 10px; min-height: 100px; background: #fff;"></div>
+        </div>
+
         <div id="approvalStamp"></div>
-        <div style="margin-top: 100px; display: flex; justify-content: space-between;">
-            <div><p>Начальник управления</p></div>
-            <div style="text-align: right;"><div id="bossSign" style="border-bottom: 1px solid black; min-width: 150px;"></div><p>А.Б. Носов</p></div>
+
+        <div style="margin-top: 80px; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <p>Начальник управления ПБ, ОТ и ОС</p>
+            </div>
+            <div style="text-align: right; min-width: 200px;">
+                <div id="bossSign" style="border-bottom: 1px solid black; height: 40px; margin-bottom: 5px;"></div>
+                <p>А.Б. Носов</p>
+            </div>
         </div>
     </div>
 </div>
@@ -111,31 +163,33 @@
     let currentUser = null;
     let selectedAct = null;
 
+    // ВХОД
     async function signIn() {
-        const { error } = await _supabase.auth.signInWithPassword({ 
-            email: document.getElementById('userLogin').value.trim() + "@ssk.local", 
-            password: document.getElementById('userPass').value 
-        });
-        if (error) alert("Ошибка входа"); else checkSession();
+        const login = document.getElementById('userLogin').value.trim();
+        const pass = document.getElementById('userPass').value;
+        const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
+        if (error) alert("Ошибка: Неверный логин или пароль"); else checkSession();
     }
 
+    // ПРОВЕРКА СЕССИИ И ПРАВ
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         if (!session) return;
 
-        // Проверка: существует ли профиль?
+        // Проверяем наличие профиля в БД (защита от удаления)
         const { data: profile, error } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
         if (error || !profile) {
-            alert("Ваша учетная запись удалена или доступ закрыт.");
-            signOut(); // Принудительный выход
+            alert("Ваш доступ аннулирован.");
+            signOut();
             return;
         }
 
         currentUser = profile;
         document.getElementById('loginForm').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
-        document.getElementById('welcomeText').innerText = `Журнал: ${profile.username} (${profile.department})`;
+        document.getElementById('welcomeText').innerText = `Сотрудник: ${profile.username}`;
+        document.getElementById('userRoleBadge').innerText = `${profile.role} | Подразделение: ${profile.department}`;
         
         if (profile.can_manage_users) {
             document.getElementById('adminSection').style.display = 'block';
@@ -145,72 +199,101 @@
         loadActs();
     }
 
+    // ЗАГРУЗКА ЦЕХОВ
     async function loadDepartments() {
         const { data: depts } = await _supabase.from('departments').select('*').order('name');
-        if (depts) document.getElementById('regDept').innerHTML = depts.map(d => `<option value="${d.name}">${d.type}: ${d.name}</option>`).join('');
+        if (depts) {
+            document.getElementById('regDept').innerHTML = depts.map(d => `<option value="${d.name}">${d.type}: ${d.name}</option>`).join('');
+        }
     }
 
     async function addDepartment() {
         const name = document.getElementById('newDeptName').value.trim();
-        if (!name) return;
+        if (!name) return alert("Введите название");
         await _supabase.from('departments').insert([{ name, type: document.getElementById('newDeptType').value }]);
+        document.getElementById('newDeptName').value = '';
         loadDepartments();
     }
 
+    // УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ
     async function loadUsers() {
         const { data: users } = await _supabase.from('profiles').select('*').order('username');
-        document.getElementById('usersList').innerHTML = users.map(user => `
+        document.getElementById('usersList').innerHTML = users.map(u => `
             <tr>
-                <td>${user.username}</td>
-                <td>${user.role}<br><small>${user.department}</small></td>
-                <td><input type="checkbox" ${user.can_manage_users ? 'checked' : ''} onchange="upRight('${user.id}','can_manage_users',this.checked)"></td>
-                <td><input type="checkbox" ${user.can_sign_docs ? 'checked' : ''} onchange="upRight('${user.id}','can_sign_docs',this.checked)"></td>
-                <td><input type="checkbox" ${user.can_delete_acts ? 'checked' : ''} onchange="upRight('${user.id}','can_delete_acts',this.checked)"></td>
-                <td><input type="checkbox" ${user.can_view_reports ? 'checked' : ''} onchange="upRight('${user.id}','can_view_reports',this.checked)"></td>
-                <td><button class="btn-del" onclick="delUser('${user.id}')">Удалить</button></td>
+                <td><b>${u.username}</b></td>
+                <td>${u.role}<br><small>${u.department}</small></td>
+                <td><input type="checkbox" ${u.can_manage_users ? 'checked' : ''} onchange="updateRight('${u.id}','can_manage_users',this.checked)"></td>
+                <td><input type="checkbox" ${u.can_sign_docs ? 'checked' : ''} onchange="updateRight('${u.id}','can_sign_docs',this.checked)"></td>
+                <td><input type="checkbox" ${u.can_delete_acts ? 'checked' : ''} onchange="updateRight('${u.id}','can_delete_acts',this.checked)"></td>
+                <td><input type="checkbox" ${u.can_view_reports ? 'checked' : ''} onchange="updateRight('${u.id}','can_view_reports',this.checked)"></td>
+                <td><button class="btn-del" onclick="delUser('${u.id}')">Удалить</button></td>
             </tr>
         `).join('');
     }
 
-    async function delUser(id) {
-        if (!confirm("Удалить доступ?")) return;
-        await _supabase.from('profiles').delete().eq('id', id);
-        loadUsers();
-    }
-
-    async function upRight(id, col, val) {
+    async function updateRight(id, col, val) {
         const up = {}; up[col] = val;
         await _supabase.from('profiles').update(up).eq('id', id);
+    }
+
+    async function delUser(id) {
+        if (confirm("Удалить сотрудника из системы?")) {
+            await _supabase.from('profiles').delete().eq('id', id);
+            loadUsers();
+        }
     }
 
     async function createUser() {
         const login = document.getElementById('regLogin').value.trim();
         const dept = document.getElementById('regDept').value;
         const role = document.getElementById('regRole').value;
+        const pass = document.getElementById('regPass').value;
 
+        // Лимит 2 человека на роль в одном отделе
         const { count } = await _supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', role).eq('department', dept);
-        if (count >= 2) return alert("Лимит 2 чел. исчерпан");
+        if (count >= 2) return alert("В данном подразделении лимит этой роли (2 чел) исчерпан.");
 
-        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: document.getElementById('regPass').value });
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
         if (error) return alert(error.message);
 
-        await _supabase.from('profiles').insert([{ id: data.user.id, username: login, role, department: dept, can_manage_users: (role==='Администратор') }]);
+        await _supabase.from('profiles').insert([{ 
+            id: data.user.id, 
+            username: login, 
+            role: role, 
+            department: dept, 
+            can_manage_users: (role === 'Администратор') 
+        }]);
+        alert("Пользователь создан");
         loadUsers();
     }
 
+    // ЛОГИКА ФИЛЬТРАЦИИ АКТОВ (МАТРИЦА ПРАВ)
     async function loadActs() {
         let query = _supabase.from('acts').select('*');
-        if (currentUser.role.includes('Начальник')) query = query.eq('location', currentUser.department);
-        const { data } = await query.order('created_at', { ascending: false });
-        document.getElementById('actsTable').innerHTML = data.map(act => `
-            <tr onclick="viewAct(${JSON.stringify(act).replace(/"/g, '&quot;')})">
-                <td>${new Date(act.created_at).toLocaleDateString()}</td>
-                <td>${act.location}</td>
-                <td>${act.violation_desc}</td>
-                <td><img src="${act.image_url}" style="width:40px;height:30px;object-fit:cover;"></td>
-                <td>${act.is_signed ? '✅' : '⏳'}</td>
-            </tr>
-        `).join('');
+
+        // 1. Начальник цеха видит только акты ГДЕ ЕГО ЦЕХ — МЕСТО НАРУШЕНИЯ
+        if (currentUser.role === 'Начальник цеха') {
+            query = query.eq('location', currentUser.department);
+        } 
+        // 2. Начальник отдела видит только АКТЫ, СОЗДАННЫЕ ЕГО ОТДЕЛОМ
+        else if (currentUser.role === 'Нач. отдела') {
+            query = query.eq('created_by_dept', currentUser.department);
+        }
+        // 3. Администратор и Нач. Управления видят всё (фильтр не накладывается)
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        
+        if (data) {
+            document.getElementById('actsTable').innerHTML = data.map(act => `
+                <tr onclick='viewAct(${JSON.stringify(act)})'>
+                    <td>${new Date(act.created_at).toLocaleDateString()}</td>
+                    <td><b>${act.location}</b></td>
+                    <td>${act.violation_desc.substring(0, 50)}...</td>
+                    <td><img src="${act.image_url}" style="width:40px;height:30px;object-fit:cover;border-radius:4px;"></td>
+                    <td>${act.is_signed ? '✅ Подписан' : '⏳ Ожидает'}</td>
+                </tr>
+            `).join('');
+        }
     }
 
     function viewAct(act) {
@@ -219,20 +302,40 @@
         document.getElementById('p-date').innerText = new Date(act.created_at).toLocaleDateString();
         document.getElementById('p-loc').innerText = act.location;
         document.getElementById('p-text').innerText = act.violation_desc;
+        
+        // Отображение штампов
         document.getElementById('approvalStamp').innerHTML = act.dept_sign ? `<div class="e-stamp">СОГЛАСОВАНО: ${act.dept_sign}</div>` : '';
-        document.getElementById('bossSign').innerHTML = act.is_signed ? `<span style="font-family:'Brush Script MT', cursive; font-size:24px">Nosov A.B.</span>` : '';
+        document.getElementById('bossSign').innerHTML = act.is_signed ? `<span style="font-family:'Brush Script MT', cursive; font-size:26px; color: blue;">Nosov A.B.</span>` : '';
+        
         document.getElementById('prescriptionModal').style.display = 'block';
     }
 
     async function applySignature() {
-        if (!currentUser.can_sign_docs) return alert("Нет прав!");
-        let up = currentUser.role === 'Начальник управления' ? { is_signed: true } : { dept_sign: `${currentUser.username} (${currentUser.department})` };
-        await _supabase.from('acts').update(up).eq('id', selectedAct.id);
-        location.reload();
+        if (!currentUser.can_sign_docs) return alert("У вас нет прав электронной подписи!");
+        
+        let updateData = {};
+        if (currentUser.role === 'Начальник управления') {
+            updateData = { is_signed: true };
+        } else if (currentUser.role === 'Нач. отдела') {
+            updateData = { dept_sign: `${currentUser.username} (${currentUser.department})` };
+        } else {
+            return alert("Ваша роль не предполагает подпись предписаний.");
+        }
+
+        const { error } = await _supabase.from('acts').update(updateData).eq('id', selectedAct.id);
+        if (!error) {
+            alert("Документ успешно подписан");
+            location.reload();
+        }
     }
 
     function closeModal() { document.getElementById('prescriptionModal').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); localStorage.clear(); location.reload(); }
+    
+    async function signOut() { 
+        await _supabase.auth.signOut(); 
+        localStorage.clear(); 
+        location.reload(); 
+    }
     
     checkSession();
 </script>
