@@ -2,43 +2,50 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Конструктор структуры - ССК</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 40px; }
-        .setup-card { background: white; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
-        button { background: #27ae60; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .back-link { display: block; text-align: center; margin-top: 20px; color: #3498db; text-decoration: none; }
-        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; color: #1a252f; }
+        :root { --primary: #2c3e50; --accent: #8e44ad; --danger: #c0392b; --success: #27ae60; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 30px; margin: 0; font-size: 18px; }
+        
+        .setup-card { background: white; max-width: 800px; margin: 0 auto; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        
+        h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; }
+        
+        input, select { width: 100%; padding: 18px; margin: 15px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 18px; box-sizing: border-box; }
+        
+        button { width: 100%; padding: 20px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 18px; transition: 0.2s; }
+        .btn-save { background: var(--success); color: white; margin-bottom: 30px; }
+        .btn-save:hover { background: #219150; }
+        
+        .dept-item { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 15px 20px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid var(--accent); }
+        .btn-del-mini { background: var(--danger); color: white; width: auto; padding: 8px 15px; font-size: 14px; }
+        
+        .back-link { display: block; text-align: center; margin-top: 40px; color: #3498db; text-decoration: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="setup-card">
-    <h2>🛠 Конструктор структуры</h2>
-    <p>Добавьте новый цех или отдел в базу данных системы:</p>
+    <h2>🛠 Конструктор подразделений</h2>
+    <p>Добавьте цеха, отделы или участки, которые будут доступны в системе:</p>
     
-    <input type="text" id="deptName" placeholder="Название (например: Цех №5, Отдел ПБ)">
-    <select id="deptType">
-        <option value="Цех">Тип: Производственный Цех</option>
-        <option value="Отдел">Тип: Административный Отдел</option>
-    </select>
-    <button onclick="saveDept()">СОХРАНИТЬ В БАЗУ</button>
+    <div style="background: #eef2f3; padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+        <input type="text" id="deptName" placeholder="Название (например: Цех №3 или Отдел Экологии)">
+        <select id="deptType">
+            <option value="Цех">Производственное подразделение (Цех)</option>
+            <option value="Отдел">Управленческий отдел (Инспекция)</option>
+        </select>
+        <button class="btn-save" onclick="saveDept()">+ ДОБАВИТЬ В БАЗУ</button>
+    </div>
 
-    <h2 style="margin-top:40px;">👤 Регистрация сотрудника</h2>
-    <input type="text" id="regLogin" placeholder="Логин (ivanov)">
-    <input type="password" id="regPass" placeholder="Пароль">
-    <select id="regRole">
-        <option value="Наблюдатель">Наблюдатель</option>
-        <option value="Начальник цеха">Начальник цеха</option>
-        <option value="Инспектор">Инспектор</option>
-        <option value="Администратор">Администратор</option>
-    </select>
-    <select id="targetDept"></select>
-    <button onclick="registerUser()" style="background: #3498db;">СОЗДАТЬ АККАУНТ</button>
+    <h3>Список текущих подразделений:</h3>
+    <div id="deptsList">
+        <p style="color: gray;">Загрузка списка...</p>
+    </div>
 
-    <a href="index.html" class="back-link">← Вернуться к журналу актов</a>
+    <a href="index.html" class="back-link">← Вернуться на главную страницу</a>
 </div>
 
 <script>
@@ -46,47 +53,46 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Загрузка списка цехов в выпадающий список
+    // Загрузка списка подразделений
     async function loadDepts() {
-        const { data } = await _supabase.from('departments').select('*').order('name');
-        const select = document.getElementById('targetDept');
-        select.innerHTML = data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        const { data, error } = await _supabase.from('departments').select('*').order('name');
+        const container = document.getElementById('deptsList');
+        
+        if (data && data.length > 0) {
+            container.innerHTML = data.map(d => `
+                <div class="dept-item">
+                    <span><strong>${d.name}</strong> <small style="color:gray">(${d.type})</small></span>
+                    <button class="btn-del-mini" onclick="deleteDept(${d.id})">Удалить</button>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p style="color: gray;">Подразделений пока нет.</p>';
+        }
     }
 
-    // Сохранение нового цеха
+    // Сохранение
     async function saveDept() {
         const name = document.getElementById('deptName').value.trim();
         const type = document.getElementById('deptType').value;
+        
         if(!name) return alert("Введите название!");
 
         const { error } = await _supabase.from('departments').insert([{ name, type }]);
-        if(error) alert("Ошибка: " + error.message);
-        else {
-            alert("Подразделение добавлено!");
+        if(error) {
+            alert("Ошибка: " + error.message);
+        } else {
             document.getElementById('deptName').value = '';
             loadDepts();
         }
     }
 
-    // Регистрация
-    async function registerUser() {
-        const login = document.getElementById('regLogin').value.trim();
-        const pass = document.getElementById('regPass').value;
-        const dept = document.getElementById('targetDept').value;
-        const role = document.getElementById('regRole').value;
-
-        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
-        if (error) return alert(error.message);
-
-        await _supabase.from('profiles').insert([{ 
-            id: data.user.id, 
-            username: login, 
-            role: role, 
-            department: dept,
-            can_manage_users: (role === 'Администратор'),
-            can_use_mobile: true 
-        }]);
-        alert("Сотрудник зарегистрирован!");
+    // Удаление
+    async function deleteDept(id) {
+        if(confirm("При удалении подразделения пользователи, привязанные к нему, могут потерять доступ. Продолжить?")) {
+            const { error } = await _supabase.from('departments').delete().eq('id', id);
+            if(error) alert("Ошибка удаления");
+            else loadDepts();
+        }
     }
 
     loadDepts();
