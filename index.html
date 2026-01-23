@@ -3,121 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EHS Система Управления - ССК</title>
+    <title>EHS Система - ССК</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --success: #27ae60; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #333; }
-        
-        /* Авторизация */
-        .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; margin: 100px auto; }
-        input, select { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        
-        /* Контейнер приложения */
+        :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --danger: #e74c3c; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 350px; text-align: center; margin: 100px auto; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .container { max-width: 1200px; margin: 0 auto; display: none; }
-        
-        /* Панель админа */
-        #adminSection { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--accent); margin-bottom: 30px; display: none; }
-        .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        
-        /* Таблицы */
-        .table-wrapper { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px; }
+        #adminSection { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 30px; display: none; }
+        .table-wrapper { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow-x: auto; margin-top: 20px; }
         table { width: 100%; border-collapse: collapse; }
-        th { background: var(--primary); color: white; padding: 15px; text-align: left; font-size: 13px; text-transform: uppercase; }
-        td { padding: 15px; border-bottom: 1px solid #eee; font-size: 14px; }
-        tr:hover { background-color: #f9f9f9; }
-
-        /* Кнопки */
-        button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        button:hover { background: #2980b9; opacity: 0.9; }
-        .btn-logout { background: #e74c3c; }
-
-        /* Статусы и фото */
-        .role-badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; color: white; background: #95a5a6; }
-        .role-admin { background: #e74c3c; }
-        .img-preview { width: 80px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; }
+        th { background: var(--primary); color: white; padding: 12px; text-align: left; font-size: 13px; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .img-preview { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; cursor: pointer; }
         
-        .matrix-checkbox { transform: scale(1.2); cursor: pointer; }
+        /* Стили предписания */
+        #prescriptionModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto; }
+        .prescription-paper { background: white; width: 210mm; min-height: 297mm; margin: 20px auto; padding: 20px 40px; box-sizing: border-box; font-family: "Times New Roman", serif; color: black; line-height: 1.3; }
+        .p-header { text-align: center; font-weight: bold; margin-bottom: 30px; }
+        .p-body { margin-top: 20px; }
+        .p-table { width: 100%; border: 1px solid black; border-collapse: collapse; margin: 15px 0; }
+        .p-table th, .p-table td { border: 1px solid black; padding: 8px; text-align: left; }
+        .p-footer { margin-top: 50px; }
+        .no-print { display: flex; justify-content: space-between; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div id="loginForm" class="auth-card">
     <h2 style="color: var(--primary)">EHS Мониторинг</h2>
-    <p style="color: #666; font-size: 14px;">Введите ваш рабочий логин</p>
-    <input type="text" id="userLogin" placeholder="Логин (например: admin)">
+    <input type="text" id="userLogin" placeholder="Логин">
     <input type="password" id="userPass" placeholder="Пароль">
-    <button onclick="signIn()" style="width: 100%;">ВОЙТИ В СИСТЕМУ</button>
+    <button onclick="signIn()" style="width: 100%;">ВОЙТИ</button>
 </div>
 
 <div id="mainContent" class="container">
-    
     <div id="adminSection">
-        <div class="admin-header">
-            <h2 style="margin: 0; color: var(--primary)">Управление доступом и персоналом</h2>
+        <h3>Управление сотрудниками</h3>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="regLogin" style="width:150px" placeholder="Логин">
+            <input type="password" id="regPass" style="width:150px" placeholder="Пароль">
+            <select id="regRole" style="width:200px">
+                <option value="Наблюдатель">Наблюдатель</option>
+                <option value="Начальник цеха">Начальник цеха</option>
+                <option value="Нач. отдела (ПБ, ОТ, ОС)">Нач. отдела (ПБ, ОТ, ОС)</option>
+                <option value="Начальник управления">Начальник управления</option>
+                <option value="Администратор">Администратор</option>
+            </select>
+            <button onclick="createUser()">Добавить</button>
         </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; background: #f8f9fa; padding: 20px; border-radius: 8px;">
-            <div>
-                <label style="font-size: 12px; font-weight: bold;">Логин нового сотрудника</label>
-                <input type="text" id="regLogin" placeholder="ivanov_i">
-            </div>
-            <div>
-                <label style="font-size: 12px; font-weight: bold;">Временный пароль</label>
-                <input type="password" id="regPass" placeholder="******">
-            </div>
-            <div>
-                <label style="font-size: 12px; font-weight: bold;">Группа/Должность</label>
-                <select id="regRole">
-                    <option value="Наблюдатель">Наблюдатель</option>
-                    <option value="Начальник цеха">Начальник цеха</option>
-                    <option value="Нач. отдела (ПБ, ОТ, ОС)">Нач. отдела (ПБ, ОТ, ОС)</option>
-                    <option value="Начальник управления">Начальник управления</option>
-                    <option value="Администратор">Администратор</option>
-                </select>
-            </div>
-            <div style="display: flex; align-items: flex-end;">
-                <button onclick="createUser()" style="width: 100%; margin-bottom: 10px;">СОЗДАТЬ АККАУНТ</button>
-            </div>
-        </div>
-
         <div class="table-wrapper">
             <table>
                 <thead>
-                    <tr>
-                        <th>Сотрудник</th>
-                        <th>Группа</th>
-                        <th>Админ-панель</th>
-                        <th>Право подписи</th>
-                        <th>Удаление актов</th>
-                        <th>Просмотр отчетов</th>
-                    </tr>
+                    <tr><th>ФИО</th><th>Группа</th><th>Админ</th><th>Подпись</th><th>Удаление</th><th>Отчеты</th><th>Действие</th></tr>
                 </thead>
-                <tbody id="usersList">
-                    </tbody>
+                <tbody id="usersList"></tbody>
             </table>
         </div>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h2 style="color: var(--primary)">Электронный журнал нарушений</h2>
-        <button onclick="signOut()" class="btn-logout">ВЫЙТИ</button>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Электронный журнал (Нажмите на строку для Предписания)</h2>
+        <button onclick="signOut()" style="background:var(--danger)">Выйти</button>
     </div>
-
     <div class="table-wrapper">
         <table>
             <thead>
-                <tr>
-                    <th>Дата и время</th>
-                    <th>Инспектор</th>
-                    <th>Место нарушения</th>
-                    <th>Описание</th>
-                    <th>Фотофиксация</th>
-                </tr>
+                <tr><th>Дата</th><th>Инспектор</th><th>Место</th><th>Нарушение</th><th>Фото</th></tr>
             </thead>
-            <tbody id="tableBody">
-                </tbody>
+            <tbody id="tableBody"></tbody>
         </table>
+    </div>
+</div>
+
+<div id="prescriptionModal">
+    <div class="prescription-paper">
+        <div class="no-print">
+            <button onclick="window.print()">Печать / PDF</button>
+            <button onclick="closePrescription()" style="background:grey">Закрыть</button>
+        </div>
+        <div id="printArea">
+            <div class="p-header">
+                <p>Управление промышленной безопасности, охраны труда и окружающей среды</p>
+                <p style="font-size: 24px; margin: 20px 0;">ПРЕДПИСАНИЕ</p>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>№ <span id="p-num">___</span></span>
+                    <span>дата: <span id="p-date">_________</span></span>
+                </div>
+            </div>
+            <div class="p-body">
+                <p>В ходе осуществления ежедневного контроля <b><span id="p-check-date">_________</span>г.</b> были выявлены нарушения требований нормативных документов:</p>
+                <table class="p-table">
+                    <thead>
+                        <tr><th>№ п/п</th><th>Перечень выявленных нарушений</th><th>Нормативный документ</th><th>Мероприятия по устранению</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td id="p-desc"></td><td id="p-norm">В соответствии с требованиями ПБ и ОТ</td><td id="p-action">Устранить в кратчайшие сроки</td></tr>
+                    </tbody>
+                </table>
+                <p>Мероприятия по устранению обязательны для исполнения и могут отменяться только генеральным директором Общества.</p>
+                <p>О выполнении сообщать в УПБ, ОТ и ОС.</p>
+            </div>
+            <div class="p-footer">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div style="width: 60%;">
+                        <b>И.о. начальника управления / УПБ, ОТ и ОС</b>
+                    </div>
+                    <div style="width: 30%; text-align: right; border-bottom: 1px solid black;">
+                        <b>А.Б. Носов</b>
+                    </div>
+                </div>
+                <div style="margin-top: 60px;">
+                    <p>Предписание получил: ___________________ / ___________________</p>
+                    <p style="font-size: 10px; margin-top: -10px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(подпись)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Ф.И.О., должность)</p>
+                    <p>Дата: "____" __________ 20___ г.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -126,118 +130,86 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Вход
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value.trim();
-        
-        if(!login || !pass) return alert("Заполните все поля");
-
-        const { data, error } = await _supabase.auth.signInWithPassword({
-            email: login + "@ssk.local",
-            password: pass
-        });
-
-        if (error) alert("Ошибка авторизации: неверный логин или пароль");
-        else checkSession();
+        const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
+        if (error) alert("Ошибка входа"); else checkSession();
     }
 
-    // Проверка сессии и прав
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         if (session) {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
-            
-            const { data: profile } = await _supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-            
-            if (profile && profile.can_manage_users) {
-                document.getElementById('adminSection').style.display = 'block';
-                loadUsers();
-            }
+            const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            if (profile?.can_manage_users) { document.getElementById('adminSection').style.display = 'block'; loadUsers(); }
             loadActs();
         }
     }
 
-    // Загрузка матрицы прав
     async function loadUsers() {
-        const { data: users, error } = await _supabase.from('profiles').select('*').order('username');
-        if(error) return;
-
-        const list = document.getElementById('usersList');
-        list.innerHTML = users.map(user => `
+        const { data: users } = await _supabase.from('profiles').select('*').order('username');
+        document.getElementById('usersList').innerHTML = users.map(user => `
             <tr>
-                <td><strong>${user.username}</strong></td>
-                <td><span class="role-badge ${user.can_manage_users ? 'role-admin' : ''}">${user.role}</span></td>
-                <td align="center"><input type="checkbox" class="matrix-checkbox" ${user.can_manage_users ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_manage_users', this.checked)"></td>
-                <td align="center"><input type="checkbox" class="matrix-checkbox" ${user.can_sign_docs ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_sign_docs', this.checked)"></td>
-                <td align="center"><input type="checkbox" class="matrix-checkbox" ${user.can_delete_acts ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_delete_acts', this.checked)"></td>
-                <td align="center"><input type="checkbox" class="matrix-checkbox" ${user.can_view_reports ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_view_reports', this.checked)"></td>
+                <td>${user.username}</td>
+                <td>${user.role}</td>
+                <td><input type="checkbox" ${user.can_manage_users ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_manage_users', this.checked)"></td>
+                <td><input type="checkbox" ${user.can_sign_docs ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_sign_docs', this.checked)"></td>
+                <td><input type="checkbox" ${user.can_delete_acts ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_delete_acts', this.checked)"></td>
+                <td><input type="checkbox" ${user.can_view_reports ? 'checked' : ''} onchange="updateRight('${user.id}', 'can_view_reports', this.checked)"></td>
+                <td>${user.username !== 'admin' ? `<button onclick="delUser('${user.id}')" style="background:red; padding:4px">Удалить</button>` : ''}</td>
             </tr>
         `).join('');
     }
 
-    // Мгновенное обновление прав
-    async function updateRight(userId, column, value) {
-        const obj = {}; obj[column] = value;
-        const { error } = await _supabase.from('profiles').update(obj).eq('id', userId);
-        if (error) alert("Ошибка при сохранении прав");
+    async function updateRight(id, col, val) { 
+        const up = {}; up[col] = val; 
+        await _supabase.from('profiles').update(up).eq('id', id); 
     }
 
-    // Регистрация нового сотрудника
+    async function delUser(id) {
+        if(confirm("Удалить сотрудника?")) {
+            await _supabase.from('profiles').delete().eq('id', id);
+            alert("Профиль удален. Для полного удаления из Auth используйте панель Supabase.");
+            loadUsers();
+        }
+    }
+
     async function createUser() {
         const login = document.getElementById('regLogin').value.trim();
         const pass = document.getElementById('regPass').value.trim();
         const role = document.getElementById('regRole').value;
-
-        if(!login || !pass) return alert("Укажите логин и пароль");
-
-        const { data, error } = await _supabase.auth.signUp({
-            email: login + "@ssk.local",
-            password: pass
-        });
-
-        if (error) return alert("Ошибка: " + error.message);
-
-        await _supabase.from('profiles').insert([{ 
-            id: data.user.id, 
-            username: login, 
-            role: role,
-            can_manage_users: (role === 'Администратор') 
-        }]);
-
-        alert("Сотрудник " + login + " добавлен в базу");
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if (error) return alert(error.message);
+        await _supabase.from('profiles').insert([{ id: data.user.id, username: login, role: role, can_manage_users: (role === 'Администратор') }]);
         loadUsers();
     }
 
-    // Журнал нарушений
     async function loadActs() {
-        const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-        if(error) return;
-
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = data.map(act => `
-            <tr>
-                <td>${new Date(act.created_at).toLocaleString('ru-RU')}</td>
-                <td><b>${act.inspector || 'Система'}</b></td>
+        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        document.getElementById('tableBody').innerHTML = data.map(act => `
+            <tr onclick="generatePrescription(${JSON.stringify(act).replace(/"/g, '&quot;')})" style="cursor:pointer">
+                <td>${new Date(act.created_at).toLocaleString()}</td>
+                <td>${act.inspector || '—'}</td>
                 <td>${act.location}</td>
                 <td>${act.violation_desc}</td>
-                <td>
-                    ${act.image_url ? `<a href="${act.image_url}" target="_blank"><img src="${act.image_url}" class="img-preview"></a>` : 'Нет фото'}
-                </td>
+                <td><img src="${act.image_url}" class="img-preview"></td>
             </tr>
         `).join('');
     }
 
-    async function signOut() {
-        await _supabase.auth.signOut();
-        location.reload();
+    function generatePrescription(act) {
+        const date = new Date(act.created_at);
+        document.getElementById('p-num').innerText = act.id.toString().substring(0, 4);
+        document.getElementById('p-date').innerText = date.toLocaleDateString();
+        document.getElementById('p-check-date').innerText = date.toLocaleDateString();
+        document.getElementById('p-desc').innerText = act.violation_desc;
+        document.getElementById('prescriptionModal').style.display = 'block';
     }
 
+    function closePrescription() { document.getElementById('prescriptionModal').style.display = 'none'; }
+    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
     checkSession();
 </script>
 </body>
