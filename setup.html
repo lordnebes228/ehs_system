@@ -58,11 +58,16 @@
         const { data, error } = await _supabase.from('departments').select('*').order('name');
         const container = document.getElementById('deptsList');
         
+        if (error) {
+            container.innerHTML = `<p style="color: red;">Ошибка загрузки: ${error.message}</p>`;
+            return;
+        }
+
         if (data && data.length > 0) {
             container.innerHTML = data.map(d => `
                 <div class="dept-item">
                     <span><strong>${d.name}</strong> <small style="color:gray">(${d.type})</small></span>
-                    <button class="btn-del-mini" onclick="deleteDept(${d.id})">Удалить</button>
+                    <button class="btn-del-mini" onclick="deleteDept('${d.id}')">Удалить</button>
                 </div>
             `).join('');
         } else {
@@ -79,7 +84,7 @@
 
         const { error } = await _supabase.from('departments').insert([{ name, type }]);
         if(error) {
-            alert("Ошибка: " + error.message);
+            alert("Ошибка сохранения: " + error.message);
         } else {
             document.getElementById('deptName').value = '';
             loadDepts();
@@ -88,10 +93,14 @@
 
     // Удаление
     async function deleteDept(id) {
+        if(!id) return;
         if(confirm("При удалении подразделения пользователи, привязанные к нему, могут потерять доступ. Продолжить?")) {
             const { error } = await _supabase.from('departments').delete().eq('id', id);
-            if(error) alert("Ошибка удаления");
-            else loadDepts();
+            if(error) {
+                alert("Ошибка удаления: " + error.message);
+            } else {
+                loadDepts();
+            }
         }
     }
 
