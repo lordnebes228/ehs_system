@@ -9,47 +9,38 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 1200px; display: none; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
         .auth-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 350px; text-align: center; margin-top: 100px; }
-        
         input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         button { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        
         #adminSection { display: none; margin-bottom: 40px; border: 2px solid #3498db; padding: 20px; border-radius: 10px; background: #f9fbff; }
-        
         table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
         th { background: var(--primary); color: white; padding: 12px; text-align: left; }
         td { padding: 12px; border-bottom: 1px solid #eee; }
-        
         .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; background: #e0e0e0; font-weight: bold; }
-        .img-preview { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <div id="loginForm" class="auth-card">
-    <h2 style="color: var(--primary)">Вход в систему EHS</h2>
-    <input type="text" id="userLogin" placeholder="Логин (просто слово)">
+    <h2 style="color: var(--primary)">Вход в EHS</h2>
+    <input type="text" id="userLogin" placeholder="Логин (например: admin)">
     <input type="password" id="userPass" placeholder="Пароль">
     <button onclick="signIn()">ВОЙТИ</button>
 </div>
 
 <div id="mainContent" class="container">
-    
     <div id="adminSection">
-        <h2 style="color: var(--accent); margin-top: 0;">Управление инспекторами</h2>
+        <h2 style="color: var(--accent)">Управление пользователями</h2>
         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
             <input type="text" id="regLogin" placeholder="Новый логин">
             <input type="password" id="regPass" placeholder="Пароль">
-            <button onclick="createUser()" style="width: 250px;">Создать аккаунт</button>
+            <button onclick="createUser()" style="width: 250px;">Создать инспектора</button>
         </div>
-        
         <table id="usersTable">
             <thead>
                 <tr>
                     <th>Логин</th>
                     <th>Роль</th>
                     <th>Админ права</th>
-                    <th>Редактирование</th>
-                    <th>Удаление</th>
                 </tr>
             </thead>
             <tbody id="usersList"></tbody>
@@ -57,59 +48,42 @@
     </div>
 
     <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Журнал нарушений (Акты)</h1>
+        <h1>Журнал нарушений</h1>
         <button onclick="signOut()" style="width: auto; background: #95a5a6; padding: 8px 20px;">Выйти</button>
     </div>
 
     <table id="actsTable">
         <thead>
-            <tr>
-                <th>Дата</th>
-                <th>Инспектор</th>
-                <th>Место</th>
-                <th>Описание нарушения</th>
-                <th>Фото</th>
-            </tr>
+            <tr><th>Дата</th><th>Инспектор</th><th>Место</th><th>Описание</th><th>Фото</th></tr>
         </thead>
         <tbody id="tableBody"></tbody>
     </table>
 </div>
 
 <script>
-    // Твои данные подключения
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Вход по логину (без ввода почты)
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value.trim();
-        
+        // Автоматически добавляем домен для входа
         const { data, error } = await _supabase.auth.signInWithPassword({
-            email: login + "@ssk.local", // Код сам добавляет домен
+            email: login + "@ssk.local",
             password: pass
         });
-
-        if (error) alert("Ошибка входа: проверьте логин и пароль");
+        if (error) alert("Ошибка: " + error.message);
         else checkSession();
     }
 
-    // Проверка прав при загрузке
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         if (session) {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
-            
-            // Получаем профиль текущего пользователя
-            const { data: profile } = await _supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-            
-            // Если админ — показываем панель управления
+            const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            // Если у пользователя есть права админа, показываем панель
             if (profile && profile.can_manage_users) {
                 document.getElementById('adminSection').style.display = 'block';
                 loadUsers();
@@ -118,7 +92,6 @@
         }
     }
 
-    // Загрузка списка всех инспекторов для управления
     async function loadUsers() {
         const { data: users } = await _supabase.from('profiles').select('*');
         const list = document.getElementById('usersList');
@@ -127,66 +100,44 @@
                 <td><b>${user.username}</b></td>
                 <td><span class="status-badge">${user.role}</span></td>
                 <td><input type="checkbox" ${user.can_manage_users ? 'checked' : ''} onchange="toggleRight('${user.id}', 'can_manage_users', this.checked)"></td>
-                <td><input type="checkbox" ${user.can_edit_acts ? 'checked' : ''} onchange="toggleRight('${user.id}', 'can_edit_acts', this.checked)"></td>
-                <td><input type="checkbox" ${user.can_delete_acts ? 'checked' : ''} onchange="toggleRight('${user.id}', 'can_delete_acts', this.checked)"></td>
             </tr>
         `).join('');
     }
 
-    // Функция изменения прав (UPDATE в базу)
     async function toggleRight(userId, column, value) {
         const updates = {};
         updates[column] = value;
+        // Обновляем права в таблице profiles
         const { error } = await _supabase.from('profiles').update(updates).eq('id', userId);
-        if (error) alert("Ошибка при сохранении прав: " + error.message);
+        if (error) alert("Ошибка: " + error.message);
     }
 
-    // Создание нового инспектора
     async function createUser() {
         const login = document.getElementById('regLogin').value.trim();
         const pass = document.getElementById('regPass').value.trim();
-
-        if(!login || !pass) return alert("Введите логин и пароль!");
-
-        const { data, error } = await _supabase.auth.signUp({
-            email: login + "@ssk.local",
-            password: pass
-        });
-
-        if (error) return alert("Ошибка: " + error.message);
-
-        // Создаем запись в таблице profiles
-        await _supabase.from('profiles').insert([{ 
-            id: data.user.id, 
-            username: login, 
-            can_manage_users: false,
-            role: 'inspector'
-        }]);
-
-        alert("Инспектор " + login + " успешно создан!");
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if (error) return alert(error.message);
+        // Создаем профиль для нового пользователя
+        await _supabase.from('profiles').insert([{ id: data.user.id, username: login, can_manage_users: false, role: 'inspector' }]);
+        alert("Пользователь " + login + " создан!");
         loadUsers();
     }
 
-    // Загрузка журнала актов
     async function loadActs() {
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = data.map(act => `
             <tr>
-                <td style="font-size: 12px;">${new Date(act.created_at).toLocaleString('ru-RU')}</td>
+                <td>${new Date(act.created_at).toLocaleString()}</td>
                 <td>${act.inspector || '—'}</td>
                 <td>${act.location}</td>
-                <td style="max-width: 400px;">${act.violation_desc}</td>
-                <td><a href="${act.image_url}" target="_blank"><img src="${act.image_url}" class="img-preview"></a></td>
+                <td>${act.violation_desc}</td>
+                <td><a href="${act.image_url}" target="_blank"><img src="${act.image_url}" style="width:50px"></a></td>
             </tr>
         `).join('');
     }
 
-    async function signOut() {
-        await _supabase.auth.signOut();
-        location.reload();
-    }
-
+    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
     checkSession();
 </script>
 </body>
