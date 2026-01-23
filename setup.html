@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Конструктор структуры - ССК</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; padding: 40px; }
+        .setup-card { background: white; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        input, select, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background: #27ae60; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .back-link { display: block; text-align: center; margin-top: 20px; color: #3498db; text-decoration: none; }
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; color: #1a252f; }
+    </style>
+</head>
+<body>
+
+<div class="setup-card">
+    <h2>🛠 Конструктор структуры</h2>
+    <p>Добавьте новый цех или отдел в базу данных системы:</p>
+    
+    <input type="text" id="deptName" placeholder="Название (например: Цех №5, Отдел ПБ)">
+    <select id="deptType">
+        <option value="Цех">Тип: Производственный Цех</option>
+        <option value="Отдел">Тип: Административный Отдел</option>
+    </select>
+    <button onclick="saveDept()">СОХРАНИТЬ В БАЗУ</button>
+
+    <h2 style="margin-top:40px;">👤 Регистрация сотрудника</h2>
+    <input type="text" id="regLogin" placeholder="Логин (ivanov)">
+    <input type="password" id="regPass" placeholder="Пароль">
+    <select id="regRole">
+        <option value="Наблюдатель">Наблюдатель</option>
+        <option value="Начальник цеха">Начальник цеха</option>
+        <option value="Инспектор">Инспектор</option>
+        <option value="Администратор">Администратор</option>
+    </select>
+    <select id="targetDept"></select>
+    <button onclick="registerUser()" style="background: #3498db;">СОЗДАТЬ АККАУНТ</button>
+
+    <a href="index.html" class="back-link">← Вернуться к журналу актов</a>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Загрузка списка цехов в выпадающий список
+    async function loadDepts() {
+        const { data } = await _supabase.from('departments').select('*').order('name');
+        const select = document.getElementById('targetDept');
+        select.innerHTML = data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+    }
+
+    // Сохранение нового цеха
+    async function saveDept() {
+        const name = document.getElementById('deptName').value.trim();
+        const type = document.getElementById('deptType').value;
+        if(!name) return alert("Введите название!");
+
+        const { error } = await _supabase.from('departments').insert([{ name, type }]);
+        if(error) alert("Ошибка: " + error.message);
+        else {
+            alert("Подразделение добавлено!");
+            document.getElementById('deptName').value = '';
+            loadDepts();
+        }
+    }
+
+    // Регистрация
+    async function registerUser() {
+        const login = document.getElementById('regLogin').value.trim();
+        const pass = document.getElementById('regPass').value;
+        const dept = document.getElementById('targetDept').value;
+        const role = document.getElementById('regRole').value;
+
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if (error) return alert(error.message);
+
+        await _supabase.from('profiles').insert([{ 
+            id: data.user.id, 
+            username: login, 
+            role: role, 
+            department: dept,
+            can_manage_users: (role === 'Администратор'),
+            can_use_mobile: true 
+        }]);
+        alert("Сотрудник зарегистрирован!");
+    }
+
+    loadDepts();
+</script>
+</body>
+</html>
