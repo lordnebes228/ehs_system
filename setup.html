@@ -192,39 +192,47 @@
 
         if(!login || !pass || !dept) return alert("Заполните все поля!");
 
+        // 1. Создаем запись в Authentication
         const { data, error } = await _supabase.auth.signUp({
             email: login + "@ssk.local",
             password: pass
         });
 
-        if(error) return alert("Ошибка: " + error.message);
+        if(error) return alert("Ошибка регистрации: " + error.message);
 
-        // Сохраняем логин, роль и пароль в профиль
-        await _supabase.from('profiles').update({ 
-            username: login, 
-            role: dept, 
-            can_view_acts: true,
-            raw_password: pass 
-        }).eq('id', data.user.id);
+        if (data.user) {
+            // 2. Принудительно создаем/обновляем запись в таблице profiles
+            const { error: profileError } = await _supabase
+                .from('profiles')
+                .upsert({ 
+                    id: data.user.id, 
+                    username: login, 
+                    role: dept, 
+                    can_view_acts: true,
+                    raw_password: pass 
+                });
 
-        alert(`Сотрудник зарегистрирован!`);
-        document.getElementById('newUserLogin').value = '';
-        document.getElementById('newUserPass').value = '';
-        loadUsers();
+            if(profileError) {
+                console.error(profileError);
+                return alert("Аккаунт создан, но не удалось заполнить профиль. Проверьте RLS политики.");
+            }
+
+            alert(`Сотрудник ${login} успешно зарегистрирован!`);
+            document.getElementById('newUserLogin').value = '';
+            document.getElementById('newUserPass').value = '';
+            loadUsers();
+        }
     }
 
-    // Сброс через пересоздание (обход ограничений Service Role)
     async function resetPasswordPrompt(id, username) {
-        const confirmReset = confirm(`Смена пароля для "${username}" требует пересоздания аккаунта. Текущий аккаунт будет удален и создан новый с тем же именем. Продолжить?`);
+        const confirmReset = confirm(`Смена пароля для "${username}" требует пересоздания аккаунта. Продолжить?`);
         
         if (confirmReset) {
             const newPass = prompt(`Введите новый пароль для ${username}:`);
             if (!newPass || newPass.length < 6) return alert("Минимум 6 символов!");
             
-            // 1. Удаляем профиль и Auth юзера (через RLS удалится профиль)
             await _supabase.from('profiles').delete().eq('id', id);
             
-            // 2. Создаем заново
             const { data, error } = await _supabase.auth.signUp({
                 email: username + "@ssk.local",
                 password: newPass
@@ -232,11 +240,12 @@
 
             if(error) return alert("Ошибка: " + error.message);
 
-            await _supabase.from('profiles').update({ 
+            await _supabase.from('profiles').upsert({ 
+                id: data.user.id,
                 username: username, 
                 raw_password: newPass,
                 can_view_acts: true 
-            }).eq('id', data.user.id);
+            });
 
             alert("Пароль успешно обновлен!");
             loadUsers();
