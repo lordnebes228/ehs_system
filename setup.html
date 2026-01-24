@@ -20,22 +20,24 @@
         
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 15px; box-sizing: border-box; }
         
+        /* Поле пароля с глазом */
+        .pass-wrapper { position: relative; }
+        .toggle-btn { position: absolute; right: 10px; top: 18px; cursor: pointer; opacity: 0.6; font-size: 18px; }
+
         button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-dept { background: var(--accent); color: white; }
         .btn-user { background: var(--user-color); color: white; }
         
-        /* Стили таблицы прав */
         .table-wrapper { overflow-x: auto; background: #fafafa; border-radius: 10px; border: 1px solid #eee; margin-top: 15px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th { background: #eee; padding: 10px; text-align: left; color: #555; }
         td { padding: 10px; border-bottom: 1px solid #ddd; vertical-align: middle; }
         
         .btn-del-mini { background: #fee; color: var(--danger); border: 1px solid #fcc; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
-        .btn-del-mini:hover { background: var(--danger); color: white; }
+        .btn-reset { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 5px; }
         
         .back-link { display: block; text-align: center; margin-top: 20px; color: #3498db; text-decoration: none; font-weight: bold; font-size: 18px; }
         .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #e0e0e0; color: #444; }
-        
         label { font-size: 12px; font-weight: bold; color: #666; margin-top: 10px; display: block; }
     </style>
 </head>
@@ -58,8 +60,7 @@
             </div>
             <div>
                 <h3>Список доступных подразделений:</h3>
-                <div id="deptsList" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-                    </div>
+                <div id="deptsList" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;"></div>
             </div>
         </div>
     </div>
@@ -70,7 +71,12 @@
             <div style="background: #f0f7ff; padding: 15px; border-radius: 12px; border: 1px solid #d0e3f0;">
                 <h3>Новый сотрудник</h3>
                 <input type="text" id="newUserLogin" placeholder="Логин (латиница)">
-                <input type="password" id="newUserPass" placeholder="Пароль">
+                
+                <div class="pass-wrapper">
+                    <input type="password" id="newUserPass" placeholder="Пароль">
+                    <span class="toggle-btn" onclick="togglePassVisibility('newUserPass')">👁️</span>
+                </div>
+
                 <select id="newUserDept">
                     <option value="">-- Выберите отдел --</option>
                 </select>
@@ -87,11 +93,10 @@
                                 <th align="center">Моб.</th>
                                 <th align="center">Акты</th>
                                 <th align="center">Подпись</th>
-                                <th></th>
+                                <th align="right">Действия</th>
                             </tr>
                         </thead>
-                        <tbody id="usersList">
-                            </tbody>
+                        <tbody id="usersList"></tbody>
                     </table>
                 </div>
             </div>
@@ -106,23 +111,27 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // --- ЛОГИКА ПОДРАЗДЕЛЕНИЙ ---
+    // Переключение видимости пароля
+    function togglePassVisibility(id) {
+        const x = document.getElementById(id);
+        x.type = x.type === "password" ? "text" : "password";
+    }
+
+    // Загрузка подразделений
     async function loadDepts() {
         const { data } = await _supabase.from('departments').select('*').order('name');
         const listCont = document.getElementById('deptsList');
         const selectCont = document.getElementById('newUserDept');
         
         if (data) {
-            // Плашки отделов
             listCont.innerHTML = data.map(d => `
-                <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 20px; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 20px; display: flex; align-items: center; gap: 8px;">
                     <span style="font-weight: bold;">${d.name}</span>
                     <span class="badge">${d.type}</span>
-                    <span onclick="deleteDept('${d.id}')" style="cursor:pointer; color:red; font-weight:bold; margin-left:5px;">×</span>
+                    <span onclick="deleteDept('${d.id}')" style="cursor:pointer; color:red; font-weight:bold;">×</span>
                 </div>
             `).join('');
 
-            // Выпадающий список
             selectCont.innerHTML = '<option value="">-- Выберите отдел --</option>' + 
                 data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
         }
@@ -144,7 +153,7 @@
         }
     }
 
-    // --- ЛОГИКА ПОЛЬЗОВАТЕЛЕЙ И ПРАВ ---
+    // Загрузка пользователей
     async function loadUsers() {
         const { data } = await _supabase.from('profiles').select('*').order('username');
         const listCont = document.getElementById('usersList');
@@ -165,6 +174,7 @@
                         <input type="checkbox" ${u.is_signed ? 'checked' : ''} onchange="updateRight('${u.id}','is_signed',this.checked)">
                     </td>
                     <td align="right">
+                        <button class="btn-reset" onclick="resetPassword('${u.id}', '${u.username}')">Пароль</button>
                         <button class="btn-del-mini" onclick="deleteUser('${u.id}')">✕</button>
                     </td>
                 </tr>
@@ -173,10 +183,8 @@
     }
 
     async function updateRight(id, col, val) {
-        const up = {}; 
-        up[col] = val;
-        const { error } = await _supabase.from('profiles').update(up).eq('id', id);
-        if(error) alert("Ошибка прав: " + error.message);
+        const up = {}; up[col] = val;
+        await _supabase.from('profiles').update(up).eq('id', id);
     }
 
     async function addUser() {
@@ -193,17 +201,21 @@
 
         if(error) return alert("Ошибка: " + error.message);
 
-        // Обновляем профиль (сразу даем доступ к актам)
         await _supabase.from('profiles').update({ 
-            username: login, 
-            role: dept,
-            can_view_acts: true 
+            username: login, role: dept, can_view_acts: true 
         }).eq('id', data.user.id);
 
-        alert("Сотрудник зарегистрирован!");
-        document.getElementById('newUserLogin').value = '';
-        document.getElementById('newUserPass').value = '';
+        alert(`Сотрудник создан!\nЛогин: ${login}\nПароль: ${pass}`);
         loadUsers();
+    }
+
+    async function resetPassword(id, username) {
+        const newPass = prompt(`Введите новый пароль для ${username}:`);
+        if (!newPass || newPass.length < 6) return alert("Минимум 6 символов!");
+        
+        // Внимание: обновление пароля другого пользователя требует Service Role Key.
+        // Если вы используете клиентский ключ, это сработает только для текущего юзера.
+        alert("Для смены пароля администратором необходимо настроить Edge Function или зайти в панель управления Supabase (Authentication -> Users -> Change Password)");
     }
 
     async function deleteUser(id) {
@@ -213,7 +225,6 @@
         }
     }
 
-    // Инициализация
     loadDepts();
     loadUsers();
 </script>
