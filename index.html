@@ -11,7 +11,6 @@
         .container { max-width: 1400px; margin: 0 auto; display: none; }
         .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px; }
         
-        /* Кнопка Админа */
         .admin-panel-link { 
             display: none; background: var(--admin); color: white; padding: 12px 20px; 
             border-radius: 10px; text-decoration: none; font-weight: bold; 
@@ -31,7 +30,6 @@
         .auth-card { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .act-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; }
 
-        /* Модалка */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
         .prescription-blank { background: white; margin: 20px auto; padding: 40px 50px; width: 210mm; min-height: 297mm; color: #000; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         
@@ -134,21 +132,43 @@
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
-        const { data, error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
+        const { data, error } = await _supabase.auth.signInWithPassword({ 
+            email: login + "@ssk.local", 
+            password: pass 
+        });
         if (error) alert("Ошибка: " + error.message); else checkSession();
     }
 
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         if (!session) return;
+
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        currentUser = profile;
+        if (!profile) return;
         
+        currentUser = profile;
+
+        // ПРОВЕРКА УСТРОЙСТВА И ПРАВ
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Если доступ только мобильный, а пользователь на ПК
+        if (profile.can_use_mobile && !profile.can_view_acts && !isMobileDevice) {
+            alert("Этот аккаунт ограничен: доступ разрешен только с мобильных устройств.");
+            await signOut();
+            return;
+        }
+
+        // Если вообще нет прав на просмотр журнала
+        if (!profile.can_view_acts && !profile.can_manage_users) {
+            alert("У вас нет прав доступа к журналу.");
+            await signOut();
+            return;
+        }
+
         document.getElementById('loginForm').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
         document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
         
-        // Показываем кнопку админки только если есть права
         if (profile.can_manage_users) { 
             document.getElementById('adminBtn').style.display = 'flex'; 
         }
@@ -163,7 +183,7 @@
 
         if (data) {
             const filtered = data.filter(a => {
-                const matchSearch = (a.location + a.violation_desc).toLowerCase().includes(searchTerm);
+                const matchSearch = (a.location + (a.violation_desc || "")).toLowerCase().includes(searchTerm);
                 const matchStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? a.is_signed : !a.is_signed);
                 return matchSearch && matchStatus;
             });
@@ -175,8 +195,8 @@
                     <td>${new Date(a.created_at).toLocaleDateString()}</td>
                     <td><b>${a.location}</b></td>
                     <td>${photos[0] ? `<img src="${photos[0]}" class="act-thumb">` : '—'}</td>
-                    <td>${a.created_by_dept}</td>
-                    <td>${a.violation_desc.substring(0, 50)}...</td>
+                    <td>${a.created_by_dept || '—'}</td>
+                    <td>${(a.violation_desc || "").substring(0, 50)}...</td>
                     <td>${a.is_signed ? '✅' : '⏳'}</td>
                 </tr>`;
             }).join('');
@@ -189,11 +209,9 @@
         document.getElementById('pDate').innerText = new Date(act.created_at).toLocaleDateString();
         document.getElementById('pMainInfo').innerHTML = `<b>Место:</b> ${act.location}<br><br><b>Нарушение:</b> ${act.violation_desc}`;
         
-        // Логика подписи
         document.getElementById('pSignAction').innerHTML = (!act.is_signed && currentUser.is_signed) 
             ? `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px;">ПОДПИСАТЬ</button>` : '';
 
-        // Фото
         let photos = []; try { photos = JSON.parse(act.image_urls || "[]"); } catch(e) {}
         document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc;">`).join('');
     }
@@ -204,7 +222,11 @@
     }
 
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
+    
+    async function signOut() { 
+        await _supabase.auth.signOut(); 
+        location.reload(); 
+    }
     
     checkSession();
 </script>
