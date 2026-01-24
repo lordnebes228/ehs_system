@@ -20,7 +20,7 @@
             margin: 0; 
             padding: 15px; 
             color: #333; 
-            font-size: 15px; /* Уменьшен масштаб для scannability */
+            font-size: 15px;
         }
         
         .container { max-width: 1400px; margin: 0 auto; display: none; }
@@ -36,68 +36,35 @@
         }
         
         button { cursor: pointer; font-weight: bold; border: none; transition: 0.2s; }
-        
+        .btn-add { background: var(--success); color: white; padding: 10px 20px; }
         .setup-btn { background: #8e44ad; color: white; width: 100%; margin-bottom: 20px; font-size: 16px; padding: 12px; }
 
         .table-wrapper { background: white; border-radius: 10px; overflow-x: auto; border: 1px solid #eee; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th { background: var(--primary); color: white; padding: 12px; text-align: left; font-size: 14px; }
-        td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; cursor: pointer; font-size: 14px; }
-        tr:hover { background: #f9f9f9; }
-
+        td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 14px; }
+        
         .search-box { background: #fff; border: 2px solid var(--accent); margin-bottom: 15px; outline: none; width: 100%; box-sizing: border-box; }
         .auth-card { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 
-        .act-thumb { 
-            width: 70px; height: 50px; 
-            object-fit: cover; border-radius: 4px; 
-            border: 1px solid #ddd;
-            background: #eee;
-        }
+        .act-thumb { width: 70px; height: 50px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; background: #eee; }
 
-        /* --- СТИЛИЗАЦИЯ ПОД БЛАНК ПРЕДПИСАНИЯ --- */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            overflow-y: auto;
-        }
-        .prescription-blank {
-            background: white;
-            margin: 20px auto;
-            padding: 40px 50px;
-            width: 210mm; /* A4 width */
-            min-height: 297mm;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            color: #000;
-            position: relative;
-        }
-        .p-header-top { font-weight: bold; text-align: left; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-        .p-title { text-align: center; font-weight: bold; font-size: 22px; margin: 20px 0; letter-spacing: 2px; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
+        .prescription-blank { background: white; margin: 20px auto; padding: 40px 50px; width: 210mm; min-height: 297mm; color: #000; position: relative; }
+        .p-header-top { font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .p-title { text-align: center; font-weight: bold; font-size: 22px; margin: 20px 0; }
         .p-meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-weight: bold; }
-        
         .p-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         .p-table th, .p-table td { border: 1px solid black; padding: 10px; text-align: left; vertical-align: top; font-size: 13px; }
-        
-        .p-footer-text { margin-top: 30px; font-size: 13px; line-height: 1.5; }
         .p-signatures { margin-top: 50px; display: flex; justify-content: space-between; }
         .p-sig-box { border-top: 1px solid #000; width: 250px; margin-top: 40px; text-align: center; font-size: 12px; }
-
-        .p-photo-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            margin-top: 40px; 
-            page-break-before: auto;
-        }
+        .p-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 40px; }
         .p-photo-grid img { width: 100%; border: 1px solid #ccc; max-height: 300px; object-fit: contain; }
 
         @media print {
             body { background: none; padding: 0; }
             .container, .modal { display: none !important; }
-            .prescription-blank { margin: 0; box-shadow: none; width: 100%; }
+            .prescription-blank { margin: 0; width: 100%; }
             .no-print { display: none !important; }
         }
     </style>
@@ -114,13 +81,16 @@
 <div id="mainContent" class="container">
     <div id="adminSection" class="card" style="display:none; border-top: 6px solid var(--accent);">
         <h2>Управление доступом</h2>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+            <div><label style="font-size: 12px;">Логин (email)</label><br><input type="text" id="newLogin" placeholder="ivanov"></div>
+            <div><label style="font-size: 12px;">Пароль</label><br><input type="password" id="newPass" placeholder="******"></div>
+            <div><label style="font-size: 12px;">Роль / Отдел</label><br><input type="text" id="newRole" placeholder="Нач. цеха №1"></div>
+            <button class="btn-add" onclick="addUser()">+ ДОБАВИТЬ СОТРУДНИКА</button>
+        </div>
         <button class="setup-btn" onclick="window.location.href='setup.html'">🛠 КОНСТРУКТОР ЦЕХОВ И ОТДЕЛОВ</button>
-        <input type="text" id="userSearch" class="search-box" placeholder="🔍 Поиск сотрудника..." oninput="filterUsers()">
         <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr><th>Логин</th><th>Роль/Отдел</th><th style="text-align:center">Моб</th><th style="text-align:center">Акты</th><th style="text-align:center">Подпись</th><th>Действие</th></tr>
-                </thead>
+                <thead><tr><th>Логин</th><th>Роль/Отдел</th><th align="center">Моб</th><th align="center">Акты</th><th align="center">Подпись</th><th>Действие</th></tr></thead>
                 <tbody id="usersList"></tbody>
             </table>
         </div>
@@ -132,7 +102,7 @@
             <button onclick="signOut()" style="background: var(--danger); color: white; padding: 8px 15px;">ВЫЙТИ</button>
         </div>
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px;">
-            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по объекту или описанию..." oninput="loadActs()">
+            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск..." oninput="loadActs()">
             <select id="statusFilter" onchange="loadActs()" style="height: 42px;">
                 <option value="all">Все записи</option>
                 <option value="signed">✅ Подписанные</option>
@@ -141,9 +111,7 @@
         </div>
         <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr><th>Дата</th><th>Объект</th><th>Фото</th><th>Отдел</th><th>Описание</th><th>Статус</th></tr>
-                </thead>
+                <thead><tr><th>Дата</th><th>Объект</th><th>Фото</th><th>Отдел</th><th>Описание</th><th>Статус</th></tr></thead>
                 <tbody id="actsTable"></tbody>
             </table>
         </div>
@@ -152,64 +120,23 @@
 
 <div id="actModal" class="modal">
     <div class="prescription-blank" id="printableArea">
-        <button class="no-print" onclick="closeAct()" style="position:absolute; top:10px; right:10px; background:#f4f4f4; border:1px solid #ccc; padding:5px 10px;">Закрыть</button>
-        <button class="no-print" onclick="window.print()" style="position:absolute; top:10px; right:90px; background:var(--accent); color:white; padding:5px 15px;">Печать (PDF)</button>
+        <button class="no-print" onclick="closeAct()" style="position:absolute; top:10px; right:10px;">Закрыть</button>
+        <button class="no-print" onclick="window.print()" style="position:absolute; top:10px; right:90px; background:var(--accent); color:white;">Печать (PDF)</button>
 
-        <div class="p-header-top">
-             <span id="pDeptHeader">_________________________</span>
-        </div>
-
+        <div class="p-header-top"><span id="pDeptHeader">УПРАВЛЕНИЕ ПБ, ОТ и ОС</span></div>
         <div class="p-title">ПРЕДПИСАНИЕ</div>
-
-        <div class="p-meta">
-            <div>№ <span id="pNumber">_______</span></div>
-            <div>дата: <span id="pDate">__________</span></div>
-        </div>
-
-        <p style="font-size: 14px;">В ходе осуществления ежедневного контроля <b><span id="pDateContent">__________</span>г.</b> были выявлены нарушения требований промышленной безопасности, охраны труда и окружающей среды:</p>
-
+        <div class="p-meta"><div>№ <span id="pNumber">_______</span></div><div>дата: <span id="pDate">__________</span></div></div>
+        <p>В ходе контроля <b><span id="pDateContent"></span>г.</b> выявлены нарушения:</p>
         <table class="p-table">
-            <thead>
-                <tr>
-                    <th width="30">№ п/п</th>
-                    <th>Перечень выявленных нарушений</th>
-                    <th>Наименование нормативного документа</th>
-                    <th>Мероприятия по устранению</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>1.</td>
-                    <td>
-                        <b>Место:</b> <span id="pLocation"></span><br><br>
-                        <b>Описание:</b> <span id="pViolation"></span>
-                    </td>
-                    <td>Требования ПБ и ОТ предприятия</td>
-                    <td>Привести в соответствие с требованиями нормативной документации.</td>
-                </tr>
-            </tbody>
+            <thead><tr><th width="30">№</th><th>Выявленное нарушение</th><th>Нормативный документ</th><th>Мероприятия по устранению</th></tr></thead>
+            <tbody><tr><td>1.</td><td><b>Место:</b> <span id="pLocation"></span><br><br><b>Описание:</b> <span id="pViolation"></span></td><td id="pLaw">—</td><td id="pTask">—</td></tr></tbody>
         </table>
-
-        <div class="p-footer-text">
-            Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки и могут отменяться только генеральным директором Общества.
-            По истечении указанных сроков устранения о выполнении сообщать в Управление промышленной безопасности, охраны труда и окружающей среды.
-        </div>
-
         <div class="p-signatures">
-            <div>
-                <b>Выдал (инспектор):</b>
-                <div class="p-sig-box">И.о. начальника управления / УПБ, ОТ и ОС</div>
-            </div>
-            <div style="text-align: right;">
-                <b>Получил (нач. цеха):</b>
-                <div class="p-sig-box">(дата, Ф.И.О., должность)</div>
-            </div>
+            <div><b>Выдал (инспектор):</b><div class="p-sig-box">УПБ, ОТ и ОС</div></div>
+            <div style="text-align: right;"><b>Получил (нач. цеха):</b><div class="p-sig-box">(подпись, Ф.И.О.)</div></div>
         </div>
-
         <div id="pSignAction" class="no-print" style="text-align: center; margin-top: 30px;"></div>
-
-        <div class="p-photo-grid" id="pPhotos">
-            </div>
+        <div class="p-photo-grid" id="pPhotos"></div>
     </div>
 </div>
 
@@ -219,13 +146,25 @@
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
     let currentUser = null;
-    let allUsers = []; 
+    let lawDatabase = [];
+
+    // Загрузка законов из laws.json
+    async function loadLaws() {
+        try {
+            // Замените на вашу прямую ссылку GitHub
+            const response = await fetch('https://raw.githubusercontent.com/ВАШ_АККАУНТ/ВАШ_РЕПО/main/laws.json');
+            const data = await response.json();
+            // Превращаем { "ПБ": [], "ОТ": [] } в плоский массив
+            lawDatabase = Object.values(data).flat();
+        } catch(e) { console.error("Ошибка laws.json:", e); }
+    }
+    loadLaws();
 
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
-        const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
-        if (error) alert("Ошибка входа: " + error.message); else checkSession();
+        const { data, error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
+        if (error) alert("Ошибка: " + error.message); else checkSession();
     }
 
     async function checkSession() {
@@ -236,40 +175,64 @@
         document.getElementById('loginForm').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
         document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
-        
-        if (profile.can_manage_users) {
-            document.getElementById('adminSection').style.display = 'block';
-            loadUsers();
-        }
+        if (profile.can_manage_users) { document.getElementById('adminSection').style.display = 'block'; loadUsers(); }
         loadActs();
     }
 
+    // Управление пользователями (Восстановлено)
+    async function loadUsers() {
+        const { data } = await _supabase.from('profiles').select('*').order('username');
+        renderUsers(data || []);
+    }
+
+    function renderUsers(list) {
+        document.getElementById('usersList').innerHTML = list.map(u => `
+            <tr>
+                <td><strong>${u.username}</strong></td><td>${u.role}</td>
+                <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onchange="updateRight('${u.id}','can_use_mobile',this.checked)"></td>
+                <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onchange="updateRight('${u.id}','can_view_acts',this.checked)"></td>
+                <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onchange="updateRight('${u.id}','is_signed',this.checked)"></td>
+                <td><button onclick="delUser('${u.id}')" style="color:red">Удалить</button></td>
+            </tr>`).join('');
+    }
+
+    async function addUser() {
+        const login = document.getElementById('newLogin').value.trim();
+        const pass = document.getElementById('newPass').value;
+        const role = document.getElementById('newRole').value;
+        if(!login || !pass) return alert("Заполните поля");
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if(error) return alert(error.message);
+        await _supabase.from('profiles').update({ username: login, role: role }).eq('id', data.user.id);
+        loadUsers();
+    }
+
+    async function updateRight(id, col, val) {
+        const up = {}; up[col] = val;
+        await _supabase.from('profiles').update(up).eq('id', id);
+    }
+
+    async function delUser(id) {
+        if(confirm("Удалить?")) { await _supabase.from('profiles').delete().eq('id', id); loadUsers(); }
+    }
+
+    // Работа с Актами
     async function loadActs() {
         const searchTerm = document.getElementById('actSearch').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
-        let query = _supabase.from('acts').select('*');
-        
-        const { data } = await query.order('created_at', { ascending: false });
+        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (data) {
             const filtered = data.filter(act => {
-                const matchesSearch = (act.location || '').toLowerCase().includes(searchTerm) || (act.violation_desc || '').toLowerCase().includes(searchTerm);
+                const matchesSearch = (act.location + act.violation_desc).toLowerCase().includes(searchTerm);
                 const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? act.is_signed : !act.is_signed);
                 return matchesSearch && matchesStatus;
             });
-
             document.getElementById('actsTable').innerHTML = filtered.map(act => {
-                let photos = [];
-                try { photos = typeof act.image_urls === 'string' ? JSON.parse(act.image_urls) : (act.image_urls || []); } catch(e) { photos = []; }
-                const photoUrl = photos.length > 0 ? photos[0] : null;
-                const photoHtml = photoUrl ? `<img src="${photoUrl}" class="act-thumb">` : `<div class="act-thumb" style="font-size:9px;color:#999;text-align:center">НЕТ ФОТО</div>`;
-                
+                let photos = []; try { photos = JSON.parse(act.image_urls || "[]"); } catch(e) {}
                 return `<tr onclick='openAct(${JSON.stringify(act)})'>
-                    <td>${new Date(act.created_at).toLocaleDateString()}</td>
-                    <td><b>${act.location || '—'}</b></td>
-                    <td>${photoHtml}</td>
-                    <td>${act.created_by_dept || '—'}</td>
-                    <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${act.violation_desc || '—'}</td>
-                    <td>${act.is_signed ? '✅' : '⏳'}</td>
+                    <td>${new Date(act.created_at).toLocaleDateString()}</td><td><b>${act.location}</b></td>
+                    <td>${photos[0] ? `<img src="${photos[0]}" class="act-thumb">` : '—'}</td>
+                    <td>${act.created_by_dept}</td><td>${act.violation_desc}</td><td>${act.is_signed ? '✅' : '⏳'}</td>
                 </tr>`;
             }).join('');
         }
@@ -277,34 +240,32 @@
 
     function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
-        
-        // Заполнение бланка
         document.getElementById('pDeptHeader').innerText = (act.created_by_dept || 'УПБ, ОТ и ОС').toUpperCase();
         document.getElementById('pNumber').innerText = act.id.substring(0, 6).toUpperCase();
-        const dateStr = new Date(act.created_at).toLocaleDateString();
-        document.getElementById('pDate').innerText = dateStr;
-        document.getElementById('pDateContent').innerText = dateStr;
+        const d = new Date(act.created_at).toLocaleDateString();
+        document.getElementById('pDate').innerText = d;
+        document.getElementById('pDateContent').innerText = d;
         document.getElementById('pLocation').innerText = act.location || '—';
         document.getElementById('pViolation').innerText = act.violation_desc || '—';
 
-        // Фотографии в бланке
-        let photos = [];
-        try { photos = typeof act.image_urls === 'string' ? JSON.parse(act.image_urls) : (act.image_urls || []); } catch(e) {}
-        
-        document.getElementById('pPhotos').innerHTML = photos.length > 0 
-            ? photos.map(url => `<img src="${url}" onerror="this.style.display='none'">`).join('')
-            : '<p class="no-print" style="color:gray">Фотографии отсутствуют</p>';
-
-        // Кнопка подписи
-        let actionsHtml = '';
-        if (!act.is_signed && currentUser.is_signed) {
-            actionsHtml = `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px; font-size:18px; border-radius:10px; cursor:pointer;">ПОДПИСАТЬ ПРЕДПИСАНИЕ</button>`;
+        // Поиск в базе из laws.json
+        let law = "Требования ПБ и ОТ";
+        let task = "Привести в соответствие с НД.";
+        if(lawDatabase.length > 0) {
+            const desc = (act.violation_desc || "").toLowerCase();
+            const found = lawDatabase.find(item => desc.includes(item.violation.toLowerCase()));
+            if(found) { law = found.title; task = found.text; }
         }
-        document.getElementById('pSignAction').innerHTML = actionsHtml;
+        document.getElementById('pLaw').innerText = law;
+        document.getElementById('pTask').innerText = task;
+
+        let photos = []; try { photos = JSON.parse(act.image_urls || "[]"); } catch(e) {}
+        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}">`).join('');
+        document.getElementById('pSignAction').innerHTML = (!act.is_signed && currentUser.is_signed) 
+            ? `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:10px 30px;">ПОДПИСАТЬ</button>` : '';
     }
 
     async function signAct(id) {
-        if (!confirm("Вы подтверждаете выполнение мероприятий по предписанию?")) return;
         await _supabase.from('acts').update({ is_signed: true }).eq('id', id);
         closeAct(); loadActs();
     }
@@ -312,29 +273,7 @@
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     async function signOut() { await _supabase.auth.signOut(); location.reload(); }
     
-    // Вспомогательные функции для админки (из вашего кода)
-    async function loadUsers() {
-        const { data } = await _supabase.from('profiles').select('*').order('username');
-        allUsers = data || []; renderUsers(allUsers);
-    }
-    function renderUsers(list) {
-        document.getElementById('usersList').innerHTML = list.map(u => `
-            <tr>
-                <td><strong>${u.username}</strong></td>
-                <td>${u.role}</td>
-                <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onchange="updateRight('${u.id}','can_use_mobile',this.checked)"></td>
-                <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onchange="updateRight('${u.id}','can_view_acts',this.checked)"></td>
-                <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onchange="updateRight('${u.id}','is_signed',this.checked)"></td>
-                <td><button onclick="delUser('${u.id}')" style="color:red">Удалить</button></td>
-            </tr>
-        `).join('');
-    }
-    async function updateRight(id, col, val) {
-        const up = {}; up[col] = val;
-        await _supabase.from('profiles').update(up).eq('id', id);
-    }
     checkSession();
 </script>
 </body>
 </html>
-
