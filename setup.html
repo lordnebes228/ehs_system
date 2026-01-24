@@ -20,7 +20,6 @@
         
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 15px; box-sizing: border-box; }
         
-        /* Поле пароля с глазом */
         .pass-wrapper { position: relative; }
         .toggle-btn { position: absolute; right: 10px; top: 18px; cursor: pointer; opacity: 0.6; font-size: 18px; }
 
@@ -44,7 +43,6 @@
 <body>
 
 <div class="setup-container">
-    
     <div class="setup-card">
         <h2>🛠 Конструктор подразделений</h2>
         <div class="grid">
@@ -111,13 +109,12 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Переключение видимости пароля
     function togglePassVisibility(id) {
         const x = document.getElementById(id);
         x.type = x.type === "password" ? "text" : "password";
     }
 
-    // Загрузка подразделений
+    // --- ПОДРАЗДЕЛЕНИЯ ---
     async function loadDepts() {
         const { data } = await _supabase.from('departments').select('*').order('name');
         const listCont = document.getElementById('deptsList');
@@ -153,7 +150,7 @@
         }
     }
 
-    // Загрузка пользователей
+    // --- ПОЛЬЗОВАТЕЛИ ---
     async function loadUsers() {
         const { data } = await _supabase.from('profiles').select('*').order('username');
         const listCont = document.getElementById('usersList');
@@ -174,7 +171,8 @@
                         <input type="checkbox" ${u.is_signed ? 'checked' : ''} onchange="updateRight('${u.id}','is_signed',this.checked)">
                     </td>
                     <td align="right">
-                        <button class="btn-reset" onclick="resetPassword('${u.id}', '${u.username}')">Пароль</button>
+                        <div style="font-size: 10px; color: #999; margin-bottom: 3px;">Пароль: ${u.raw_password || '—'}</div>
+                        <button class="btn-reset" onclick="resetPasswordPrompt('${u.id}', '${u.username}')">СБРОС</button>
                         <button class="btn-del-mini" onclick="deleteUser('${u.id}')">✕</button>
                     </td>
                 </tr>
@@ -201,21 +199,48 @@
 
         if(error) return alert("Ошибка: " + error.message);
 
+        // Сохраняем логин, роль и пароль в профиль
         await _supabase.from('profiles').update({ 
-            username: login, role: dept, can_view_acts: true 
+            username: login, 
+            role: dept, 
+            can_view_acts: true,
+            raw_password: pass 
         }).eq('id', data.user.id);
 
-        alert(`Сотрудник создан!\nЛогин: ${login}\nПароль: ${pass}`);
+        alert(`Сотрудник зарегистрирован!`);
+        document.getElementById('newUserLogin').value = '';
+        document.getElementById('newUserPass').value = '';
         loadUsers();
     }
 
-    async function resetPassword(id, username) {
-        const newPass = prompt(`Введите новый пароль для ${username}:`);
-        if (!newPass || newPass.length < 6) return alert("Минимум 6 символов!");
+    // Сброс через пересоздание (обход ограничений Service Role)
+    async function resetPasswordPrompt(id, username) {
+        const confirmReset = confirm(`Смена пароля для "${username}" требует пересоздания аккаунта. Текущий аккаунт будет удален и создан новый с тем же именем. Продолжить?`);
         
-        // Внимание: обновление пароля другого пользователя требует Service Role Key.
-        // Если вы используете клиентский ключ, это сработает только для текущего юзера.
-        alert("Для смены пароля администратором необходимо настроить Edge Function или зайти в панель управления Supabase (Authentication -> Users -> Change Password)");
+        if (confirmReset) {
+            const newPass = prompt(`Введите новый пароль для ${username}:`);
+            if (!newPass || newPass.length < 6) return alert("Минимум 6 символов!");
+            
+            // 1. Удаляем профиль и Auth юзера (через RLS удалится профиль)
+            await _supabase.from('profiles').delete().eq('id', id);
+            
+            // 2. Создаем заново
+            const { data, error } = await _supabase.auth.signUp({
+                email: username + "@ssk.local",
+                password: newPass
+            });
+
+            if(error) return alert("Ошибка: " + error.message);
+
+            await _supabase.from('profiles').update({ 
+                username: username, 
+                raw_password: newPass,
+                can_view_acts: true 
+            }).eq('id', data.user.id);
+
+            alert("Пароль успешно обновлен!");
+            loadUsers();
+        }
     }
 
     async function deleteUser(id) {
