@@ -3,49 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Конструктор структуры - ССК</title>
+    <title>Панель Администратора - ССК</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #2c3e50; --accent: #8e44ad; --danger: #c0392b; --success: #27ae60; }
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 30px; margin: 0; font-size: 18px; }
+        :root { --primary: #2c3e50; --accent: #8e44ad; --danger: #c0392b; --success: #27ae60; --user-color: #2980b9; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; margin: 0; font-size: 15px; }
         
-        .setup-card { background: white; max-width: 800px; margin: 0 auto; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .setup-container { max-width: 1100px; margin: 0 auto; }
+        .setup-card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 25px; }
         
-        h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; }
+        h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; display: flex; align-items: center; gap: 10px; font-size: 22px; }
+        h3 { margin-top: 0; color: var(--primary); font-size: 1.1em; border-left: 4px solid var(--user-color); padding-left: 10px; }
         
-        input, select { width: 100%; padding: 18px; margin: 15px 0; border-radius: 10px; border: 1px solid #ccc; font-size: 18px; box-sizing: border-box; }
+        .grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
         
-        button { width: 100%; padding: 20px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; font-size: 18px; transition: 0.2s; }
-        .btn-save { background: var(--success); color: white; margin-bottom: 30px; }
-        .btn-save:hover { background: #219150; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 15px; box-sizing: border-box; }
         
-        .dept-item { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 15px 20px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid var(--accent); }
-        .btn-del-mini { background: var(--danger); color: white; width: auto; padding: 8px 15px; font-size: 14px; }
+        button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-dept { background: var(--accent); color: white; }
+        .btn-user { background: var(--user-color); color: white; }
         
-        .back-link { display: block; text-align: center; margin-top: 40px; color: #3498db; text-decoration: none; font-weight: bold; }
+        /* Стили таблицы прав */
+        .table-wrapper { overflow-x: auto; background: #fafafa; border-radius: 10px; border: 1px solid #eee; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #eee; padding: 10px; text-align: left; color: #555; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        
+        .btn-del-mini { background: #fee; color: var(--danger); border: 1px solid #fcc; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .btn-del-mini:hover { background: var(--danger); color: white; }
+        
+        .back-link { display: block; text-align: center; margin-top: 20px; color: #3498db; text-decoration: none; font-weight: bold; font-size: 18px; }
+        .badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #e0e0e0; color: #444; }
+        
+        label { font-size: 12px; font-weight: bold; color: #666; margin-top: 10px; display: block; }
     </style>
 </head>
 <body>
 
-<div class="setup-card">
-    <h2>🛠 Конструктор подразделений</h2>
-    <p>Добавьте цеха, отделы или участки, которые будут доступны в системе:</p>
+<div class="setup-container">
     
-    <div style="background: #eef2f3; padding: 20px; border-radius: 15px; margin-bottom: 30px;">
-        <input type="text" id="deptName" placeholder="Название (например: Цех №3 или Отдел Экологии)">
-        <select id="deptType">
-            <option value="Цех">Производственное подразделение (Цех)</option>
-            <option value="Отдел">Управленческий отдел (Инспекция)</option>
-        </select>
-        <button class="btn-save" onclick="saveDept()">+ ДОБАВИТЬ В БАЗУ</button>
+    <div class="setup-card">
+        <h2>🛠 Конструктор подразделений</h2>
+        <div class="grid">
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 12px;">
+                <label>Название цеха или отдела</label>
+                <input type="text" id="deptName" placeholder="Например: Цех №2">
+                <label>Тип</label>
+                <select id="deptType">
+                    <option value="Цех">Производственный цех</option>
+                    <option value="Отдел">Управленческий отдел</option>
+                </select>
+                <button class="btn-dept" onclick="saveDept()">+ СОЗДАТЬ</button>
+            </div>
+            <div>
+                <h3>Список доступных подразделений:</h3>
+                <div id="deptsList" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                    </div>
+            </div>
+        </div>
     </div>
 
-    <h3>Список текущих подразделений:</h3>
-    <div id="deptsList">
-        <p style="color: gray;">Загрузка списка...</p>
+    <div class="setup-card">
+        <h2>👤 Сотрудники и Права доступа</h2>
+        <div class="grid">
+            <div style="background: #f0f7ff; padding: 15px; border-radius: 12px; border: 1px solid #d0e3f0;">
+                <h3>Новый сотрудник</h3>
+                <input type="text" id="newUserLogin" placeholder="Логин (латиница)">
+                <input type="password" id="newUserPass" placeholder="Пароль">
+                <select id="newUserDept">
+                    <option value="">-- Выберите отдел --</option>
+                </select>
+                <button class="btn-user" onclick="addUser()">ЗАРЕГИСТРИРОВАТЬ</button>
+            </div>
+
+            <div>
+                <h3>Управление доступом:</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Сотрудник / Отдел</th>
+                                <th align="center">Моб.</th>
+                                <th align="center">Акты</th>
+                                <th align="center">Подпись</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersList">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <a href="index.html" class="back-link">← Вернуться на главную страницу</a>
+    <a href="index.html" class="back-link">← ВЕРНУТЬСЯ В ЖУРНАЛ АКТОВ</a>
 </div>
 
 <script>
@@ -53,58 +106,116 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Загрузка списка подразделений
+    // --- ЛОГИКА ПОДРАЗДЕЛЕНИЙ ---
     async function loadDepts() {
-        const { data, error } = await _supabase.from('departments').select('*').order('name');
-        const container = document.getElementById('deptsList');
+        const { data } = await _supabase.from('departments').select('*').order('name');
+        const listCont = document.getElementById('deptsList');
+        const selectCont = document.getElementById('newUserDept');
         
-        if (error) {
-            container.innerHTML = `<p style="color: red;">Ошибка загрузки: ${error.message}</p>`;
-            return;
-        }
-
-        if (data && data.length > 0) {
-            container.innerHTML = data.map(d => `
-                <div class="dept-item">
-                    <span><strong>${d.name}</strong> <small style="color:gray">(${d.type})</small></span>
-                    <button class="btn-del-mini" onclick="deleteDept('${d.id}')">Удалить</button>
+        if (data) {
+            // Плашки отделов
+            listCont.innerHTML = data.map(d => `
+                <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 20px; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <span style="font-weight: bold;">${d.name}</span>
+                    <span class="badge">${d.type}</span>
+                    <span onclick="deleteDept('${d.id}')" style="cursor:pointer; color:red; font-weight:bold; margin-left:5px;">×</span>
                 </div>
             `).join('');
-        } else {
-            container.innerHTML = '<p style="color: gray;">Подразделений пока нет.</p>';
+
+            // Выпадающий список
+            selectCont.innerHTML = '<option value="">-- Выберите отдел --</option>' + 
+                data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
         }
     }
 
-    // Сохранение
     async function saveDept() {
         const name = document.getElementById('deptName').value.trim();
         const type = document.getElementById('deptType').value;
-        
         if(!name) return alert("Введите название!");
+        await _supabase.from('departments').insert([{ name, type }]);
+        document.getElementById('deptName').value = '';
+        loadDepts();
+    }
 
-        const { error } = await _supabase.from('departments').insert([{ name, type }]);
-        if(error) {
-            alert("Ошибка сохранения: " + error.message);
-        } else {
-            document.getElementById('deptName').value = '';
+    async function deleteDept(id) {
+        if(confirm("Удалить подразделение?")) {
+            await _supabase.from('departments').delete().eq('id', id);
             loadDepts();
         }
     }
 
-    // Удаление
-    async function deleteDept(id) {
-        if(!id) return;
-        if(confirm("При удалении подразделения пользователи, привязанные к нему, могут потерять доступ. Продолжить?")) {
-            const { error } = await _supabase.from('departments').delete().eq('id', id);
-            if(error) {
-                alert("Ошибка удаления: " + error.message);
-            } else {
-                loadDepts();
-            }
+    // --- ЛОГИКА ПОЛЬЗОВАТЕЛЕЙ И ПРАВ ---
+    async function loadUsers() {
+        const { data } = await _supabase.from('profiles').select('*').order('username');
+        const listCont = document.getElementById('usersList');
+        if (data) {
+            listCont.innerHTML = data.map(u => `
+                <tr>
+                    <td>
+                        <strong>${u.username}</strong><br>
+                        <span style="color: #888; font-size: 11px;">${u.role || 'Без отдела'}</span>
+                    </td>
+                    <td align="center">
+                        <input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onchange="updateRight('${u.id}','can_use_mobile',this.checked)">
+                    </td>
+                    <td align="center">
+                        <input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onchange="updateRight('${u.id}','can_view_acts',this.checked)">
+                    </td>
+                    <td align="center">
+                        <input type="checkbox" ${u.is_signed ? 'checked' : ''} onchange="updateRight('${u.id}','is_signed',this.checked)">
+                    </td>
+                    <td align="right">
+                        <button class="btn-del-mini" onclick="deleteUser('${u.id}')">✕</button>
+                    </td>
+                </tr>
+            `).join('');
         }
     }
 
+    async function updateRight(id, col, val) {
+        const up = {}; 
+        up[col] = val;
+        const { error } = await _supabase.from('profiles').update(up).eq('id', id);
+        if(error) alert("Ошибка прав: " + error.message);
+    }
+
+    async function addUser() {
+        const login = document.getElementById('newUserLogin').value.trim();
+        const pass = document.getElementById('newUserPass').value;
+        const dept = document.getElementById('newUserDept').value;
+
+        if(!login || !pass || !dept) return alert("Заполните все поля!");
+
+        const { data, error } = await _supabase.auth.signUp({
+            email: login + "@ssk.local",
+            password: pass
+        });
+
+        if(error) return alert("Ошибка: " + error.message);
+
+        // Обновляем профиль (сразу даем доступ к актам)
+        await _supabase.from('profiles').update({ 
+            username: login, 
+            role: dept,
+            can_view_acts: true 
+        }).eq('id', data.user.id);
+
+        alert("Сотрудник зарегистрирован!");
+        document.getElementById('newUserLogin').value = '';
+        document.getElementById('newUserPass').value = '';
+        loadUsers();
+    }
+
+    async function deleteUser(id) {
+        if(confirm("Удалить сотрудника?")) {
+            await _supabase.from('profiles').delete().eq('id', id);
+            loadUsers();
+        }
+    }
+
+    // Инициализация
     loadDepts();
+    loadUsers();
 </script>
 </body>
 </html>
