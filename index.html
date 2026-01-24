@@ -42,7 +42,7 @@
 </head>
 <body>
 
-<div id="loginForm" class="auth-card">
+<div id="loginForm" class="auth-card" style="display: none;">
     <h1 style="color: var(--primary);">EHS Мониторинг</h1>
     <input type="text" id="userLogin" placeholder="Логин" style="width:100%; margin-bottom: 15px;">
     <input type="password" id="userPass" placeholder="Пароль" style="width:100%;">
@@ -50,7 +50,6 @@
 </div>
 
 <div id="mainContent" class="container">
-    
     <a href="setup.html" id="adminBtn" class="admin-panel-link">🛠 ПАНЕЛЬ УПРАВЛЕНИЯ (ЦЕХА / ПРАВА)</a>
 
     <div class="card">
@@ -129,6 +128,20 @@
     
     let currentUser = null;
 
+    // Слушатель событий авторизации (срабатывает при загрузке страницы автоматически)
+    _supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            checkSession();
+        } else if (event === 'SIGNED_OUT') {
+            showLogin(true);
+        }
+    });
+
+    function showLogin(show) {
+        document.getElementById('loginForm').style.display = show ? 'block' : 'none';
+        document.getElementById('mainContent').style.display = show ? 'none' : 'block';
+    }
+
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
@@ -136,37 +149,37 @@
             email: login + "@ssk.local", 
             password: pass 
         });
-        if (error) alert("Ошибка: " + error.message); else checkSession();
+        if (error) alert("Ошибка: " + error.message);
     }
 
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
-        if (!session) return;
+        if (!session) {
+            showLogin(true);
+            return;
+        }
 
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
         if (!profile) return;
         
         currentUser = profile;
 
-        // ПРОВЕРКА УСТРОЙСТВА И ПРАВ
+        // Проверка устройства
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        // Если доступ только мобильный, а пользователь на ПК
         if (profile.can_use_mobile && !profile.can_view_acts && !isMobileDevice) {
-            alert("Этот аккаунт ограничен: доступ разрешен только с мобильных устройств.");
+            alert("Доступ разрешен только с мобильных устройств.");
             await signOut();
             return;
         }
 
-        // Если вообще нет прав на просмотр журнала
         if (!profile.can_view_acts && !profile.can_manage_users) {
-            alert("У вас нет прав доступа к журналу.");
+            alert("У вас нет прав доступа.");
             await signOut();
             return;
         }
 
-        document.getElementById('loginForm').style.display = 'none';
-        document.getElementById('mainContent').style.display = 'block';
+        showLogin(false);
         document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
         
         if (profile.can_manage_users) { 
@@ -227,8 +240,6 @@
         await _supabase.auth.signOut(); 
         location.reload(); 
     }
-    
-    checkSession();
 </script>
 </body>
 </html>
