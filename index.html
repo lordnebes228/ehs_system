@@ -39,27 +39,34 @@
             line-height: 1.2; box-sizing: border-box;
         }
         
-        /* ИСПРАВЛЕННАЯ ТАБЛИЦА */
+        /* ИСПРАВЛЕННАЯ ТАБЛИЦА ПРЕДПИСАНИЯ */
         .p-table { 
             width: 100%; 
             max-width: 100%;
             border-collapse: collapse; 
             margin: 15px 0; 
-            table-layout: fixed; /* Строгий контроль ширины колонок */
-            word-wrap: break-word;
+            table-layout: fixed; /* Жесткая фиксация колонок */
         }
         .p-table th, .p-table td { 
             border: 1px solid black; 
             padding: 8px; 
             font-size: 13px; 
             vertical-align: top; 
-            overflow-wrap: anywhere; /* Принудительный перенос длинных слов */
+            word-wrap: break-word; /* Перенос слов */
+            overflow-wrap: anywhere; 
         }
         
         @media print {
-            body { background: none; padding: 0; }
+            body { background: none !important; padding: 0 !important; }
             .container, .modal, .no-print { display: none !important; }
-            .prescription-blank { margin: 0; width: 100%; box-shadow: none; border: none; padding: 20px; }
+            .prescription-blank { 
+                display: block !important;
+                margin: 0 !important; 
+                width: 100% !important; 
+                box-shadow: none !important; 
+                border: none !important; 
+                padding: 10px !important; 
+            }
         }
     </style>
 </head>
@@ -67,7 +74,7 @@
 
 <div id="loginForm" class="auth-card" style="display: none;">
     <h1 style="color: var(--primary);">EHS Мониторинг</h1>
-    <input type="text" id="userLogin" placeholder="Логин">
+    <input type="text" id="userLogin" placeholder="Логин" style="width:100%; box-sizing:border-box;">
     <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px; width:100%; box-sizing:border-box;">
     <button onclick="signIn()" style="width: 100%; margin-top: 25px; background: var(--accent); color:white; height: 50px;">ВОЙТИ</button>
 </div>
@@ -188,6 +195,9 @@
     
     let currentUser = null;
 
+    // Инициализация при загрузке
+    document.addEventListener('DOMContentLoaded', checkSession);
+
     _supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') checkSession();
         else if (event === 'SIGNED_OUT') showLogin(true);
@@ -201,21 +211,36 @@
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
-        const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
+        const { error } = await _supabase.auth.signInWithPassword({ 
+            email: login.includes('@') ? login : login + "@ssk.local", 
+            password: pass 
+        });
         if (error) alert("Ошибка: " + error.message);
     }
 
     async function checkSession() {
-        const { data: { session } } = await _supabase.auth.getSession();
-        if (!session) { showLogin(true); return; }
+        try {
+            const { data: { session } } = await _supabase.auth.getSession();
+            if (!session) { showLogin(true); return; }
 
-        const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (!profile) return;
-        currentUser = profile;
-        showLogin(false);
-        document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
-        if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
-        loadActs();
+            const { data: profile, error } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            
+            if (error || !profile) {
+                console.error("Ошибка получения профиля:", error);
+                // Если сессия есть, но профиль не грузится (ошибка 406), даем базовый доступ
+                currentUser = { username: session.user.email, can_manage_users: false };
+            } else {
+                currentUser = profile;
+            }
+
+            showLogin(false);
+            document.getElementById('welcomeText').innerText = `Журнал: ${currentUser.username}`;
+            if (currentUser.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
+            loadActs();
+        } catch (e) {
+            console.error("Критическая ошибка:", e);
+            showLogin(true);
+        }
     }
 
     async function loadActs() {
