@@ -39,14 +39,9 @@
             line-height: 1.2; box-sizing: border-box;
         }
         
-        /* Исправление: таблица больше не выходит за рамки */
         .p-table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
         .p-table th, .p-table td { border: 1px solid black; padding: 8px; font-size: 13px; word-wrap: break-word; vertical-align: top; }
         
-        .sig-block { margin-top: 30px; }
-        .sig-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; }
-        .sig-line { border-bottom: 1px solid black; width: 150px; text-align: center; font-size: 10px; margin: 0 10px; }
-
         @media print {
             body { background: none; padding: 0; }
             .container, .modal, .no-print { display: none !important; }
@@ -73,7 +68,7 @@
         </div>
 
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px;">
-            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по объекту, цеху или нарушению..." oninput="loadActs()">
+            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по цеху или нарушению..." oninput="loadActs()">
             <select id="statusFilter" onchange="loadActs()">
                 <option value="all">Все акты</option>
                 <option value="signed">✅ Подписанные</option>
@@ -87,7 +82,6 @@
                     <tr>
                         <th>Дата</th>
                         <th>Цех / Отдел</th>
-                        <th>Объект / Место</th>
                         <th>Фото</th>
                         <th>Описание</th>
                         <th>Статус</th>
@@ -123,11 +117,11 @@
         <table class="p-table">
             <thead>
                 <tr>
-                    <th style="width: 35px;">№ п/п</th>
-                    <th>Перечень выявленных нарушений (Место)</th>
+                    <th style="width: 40px;">№ п/п</th>
+                    <th style="width: 250px;">Перечень выявленных нарушений</th>
                     <th>Наименование нормативного документа и пункта (статьи)</th>
                     <th>Мероприятия по устранению</th>
-                    <th style="width: 90px;">Сроки устранения</th>
+                    <th style="width: 90px;">Сроки</th>
                 </tr>
             </thead>
             <tbody id="pTableBody"></tbody>
@@ -136,45 +130,29 @@
         <p style="font-size: 13px; line-height: 1.4; margin-top: 25px;">
             Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки и могут отменяться только генеральным директором Общества.
         </p>
-        <p style="font-size: 13px; line-height: 1.4;">
-            По истечении указанных сроков устранения о выполнении сообщать в Управление промышленной безопасности, охраны труда и окружающей среды.
-        </p>
 
-      <div class="sig-block">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 30px;">
-                <div style="width: 50%; border-bottom: none;">
+        <div class="sig-block" style="margin-top: 40px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; margin-bottom: 35px;">
+                <div style="width: 55%;">
                     <b>И.о. начальника управления / УПБ, ОТ и ОС <br> (А.Б. Носов)</b>
                 </div>
-                <div style="width: 45%; border-bottom: 1px solid black; text-align: center; font-size: 10px;">
+                <div style="width: 40%; border-bottom: 1px solid black; text-align: center; font-size: 10px;">
                     (подпись)
                 </div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%;">
-                <div style="width: 30%;">
+                <div style="width: 35%;">
                     <b>Предписание получил:</b>
                     <div style="border-top: 1px solid black; margin-top: 20px; font-size: 10px; text-align: center;">
                         (дата, отметка о получении)
                     </div>
                 </div>
-                <div style="width: 65%;">
+                <div style="width: 60%;">
                     <br>
                     <div style="border-top: 1px solid black; margin-top: 20px; font-size: 10px; text-align: center;">
                         (Ф.И.О., должность руководителя подразделения)
                     </div>
-                    <div id="recipientStatus" style="font-size: 11px; text-align: center; margin-top: 5px;"></div>
-                </div>
-            </div>
-        </div>
-
-            <div class="sig-row" style="margin-top: 50px;">
-                <div style="width: 40%;">
-                    <b>Предписание получил:</b><br>
-                    <div style="border-bottom: 1px solid black; margin-top: 15px; font-size: 10px; text-align: center;">(дата, отметка о получении)</div>
-                </div>
-                <div style="width: 50%;">
-                    <br>
-                    <div style="border-bottom: 1px solid black; margin-top: 15px; font-size: 10px; text-align: center;">(Ф.И.О., должность)</div>
                     <div id="recipientStatus" style="font-size: 11px; text-align: center; margin-top: 5px;"></div>
                 </div>
             </div>
@@ -227,7 +205,6 @@
     }
 
     async function loadActs() {
-        // ДОБАВЛЕН ФИЛЬТР: Если юзер не админ и не инспектор, показываем только is_delivered = true
         let query = _supabase.from('acts').select('*').order('created_at', { ascending: false });
         
         if (currentUser && !currentUser.can_manage_users && currentUser.role !== 'inspector') {
@@ -240,7 +217,7 @@
 
         if (data) {
             const filtered = data.filter(a => {
-                const matchSearch = ((a.location || "") + (a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(searchTerm);
+                const matchSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(searchTerm);
                 const matchStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? a.is_signed : !a.is_signed);
                 return matchSearch && matchStatus;
             });
@@ -251,7 +228,6 @@
                 <tr onclick='openAct(${JSON.stringify(a)})'>
                     <td>${new Date(a.created_at).toLocaleDateString()}</td>
                     <td><span style="background:#eee; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${a.target_shop || '—'}</span></td>
-                    <td><b>${a.location}</b></td>
                     <td>${photos[0] ? `<img src="${photos[0]}" class="act-thumb">` : '—'}</td>
                     <td style="font-size:12px; color:#666;">${(a.violation_desc || "").substring(0, 50)}...</td>
                     <td align="center">${a.is_signed ? '✅' : '⏳'}</td>
@@ -273,10 +249,11 @@
         const lawPart = parts[0] || "Согласно нормам ПБ";
         const descPart = parts.slice(1).join('\n') || "Нарушение требований безопасности";
 
+        // КОЛОНКА МЕСТО УДАЛЕНА ИЗ ТАБЛИЦЫ
         document.getElementById('pTableBody').innerHTML = `
             <tr>
                 <td align="center">1</td>
-                <td><b>${act.location}</b><br>${descPart}</td>
+                <td>${descPart}</td>
                 <td>${lawPart}</td>
                 <td>${act.corrective_action || "Устранить выявленное нарушение"}</td>
                 <td align="center">${act.deadline || "3 дня"}</td>
@@ -313,4 +290,3 @@
 </script>
 </body>
 </html>
-
