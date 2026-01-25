@@ -39,8 +39,22 @@
             line-height: 1.2; box-sizing: border-box;
         }
         
-        .p-table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
-        .p-table th, .p-table td { border: 1px solid black; padding: 8px; font-size: 13px; word-wrap: break-word; vertical-align: top; }
+        /* ИСПРАВЛЕННАЯ ТАБЛИЦА */
+        .p-table { 
+            width: 100%; 
+            max-width: 100%;
+            border-collapse: collapse; 
+            margin: 15px 0; 
+            table-layout: fixed; /* Строгий контроль ширины колонок */
+            word-wrap: break-word;
+        }
+        .p-table th, .p-table td { 
+            border: 1px solid black; 
+            padding: 8px; 
+            font-size: 13px; 
+            vertical-align: top; 
+            overflow-wrap: anywhere; /* Принудительный перенос длинных слов */
+        }
         
         @media print {
             body { background: none; padding: 0; }
@@ -117,11 +131,11 @@
         <table class="p-table">
             <thead>
                 <tr>
-                    <th style="width: 40px;">№ п/п</th>
-                    <th style="width: 250px;">Перечень выявленных нарушений</th>
-                    <th>Наименование нормативного документа и пункта (статьи)</th>
-                    <th>Мероприятия по устранению</th>
-                    <th style="width: 90px;">Сроки</th>
+                    <th style="width: 35px;">№ п/п</th>
+                    <th style="width: 35%;">Перечень выявленных нарушений</th>
+                    <th style="width: 25%;">Наименование нормативного документа и пункта (статьи)</th>
+                    <th style="width: 25%;">Мероприятия по устранению</th>
+                    <th style="width: 75px;">Сроки</th>
                 </tr>
             </thead>
             <tbody id="pTableBody"></tbody>
@@ -249,7 +263,6 @@
         const lawPart = parts[0] || "Согласно нормам ПБ";
         const descPart = parts.slice(1).join('\n') || "Нарушение требований безопасности";
 
-        // КОЛОНКА МЕСТО УДАЛЕНА ИЗ ТАБЛИЦЫ
         document.getElementById('pTableBody').innerHTML = `
             <tr>
                 <td align="center">1</td>
