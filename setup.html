@@ -246,11 +246,20 @@
     }
 
     async function deleteUser(id) {
-        if(confirm("Удалить сотрудника?")) {
+        if(confirm("ВНИМАНИЕ! Полное удаление сотрудника и блокировка доступа. Продолжить?")) {
+            // 1. Принудительно отключаем доступы в профиле перед удалением
+            await _supabase.from('profiles').update({ 
+                can_view_acts: false, 
+                can_use_mobile: false,
+                is_signed: false 
+            }).eq('id', id);
+
+            // 2. Удаляем сам профиль
             const { error } = await _supabase.from('profiles').delete().eq('id', id);
-            if(error) alert("Ошибка удаления: " + error.message);
+            
+            if(error) alert("Ошибка при удалении: " + error.message);
             else {
-                alert("Сотрудник удален.");
+                alert("Сотрудник удален. Доступ закрыт.");
                 loadUsers();
             }
         }
