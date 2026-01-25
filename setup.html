@@ -208,20 +208,23 @@
 
         if(!login || !pass || !dept || !role) return alert("Заполните абсолютно все поля!");
 
-        // ПРОВЕРКА ЛИМИТА (2 человека на подразделение)
-        const { count, error: countError } = await _supabase
+        // ПРОВЕРКА ЛИМИТА
+        const { count } = await _supabase
             .from('profiles')
             .select('*', { count: 'exact', head: true })
             .eq('department', dept);
 
         if(count >= 2) {
-            return alert(`Ошибка: Для подразделения "${dept}" уже создано 2 учетные записи. Лимит исчерпан (Начальник и Зам).`);
+            return alert(`Ошибка: Для подразделения "${dept}" уже создано 2 учетные записи.`);
         }
 
         // 1. Создаем Auth запись
         const { data, error } = await _supabase.auth.signUp({
             email: login + "@ssk.local",
-            password: pass
+            password: pass,
+            options: {
+                data: { username: login } // Добавляем метку, чтобы не путаться
+            }
         });
 
         if(error) return alert("Ошибка системы: " + error.message);
@@ -240,11 +243,11 @@
                 });
 
             if(profileError) {
-                console.error(profileError);
-                return alert("Ошибка при сохранении профиля.");
+                console.error("Ошибка профиля:", profileError);
+                return alert("Ошибка при сохранении профиля. Проверьте RLS политики в Supabase.");
             }
 
-            alert(`Сотрудник ${login} (${role}) успешно добавлен в ${dept}`);
+            alert(`Сотрудник ${login} успешно добавлен.`);
             document.getElementById('newUserLogin').value = '';
             document.getElementById('newUserPass').value = '';
             loadUsers();
@@ -255,17 +258,27 @@
         const newPass = prompt(`Введите новый пароль для ${username}:`);
         if (!newPass || newPass.length < 6) return alert("Минимум 6 символов!");
         
-        // В упрощенной схеме мы обновляем только raw_password в профиле 
-        // (Для реальной смены пароля в Auth нужно использовать admin API или пересоздание)
-        await _supabase.from('profiles').update({ raw_password: newPass }).eq('id', id);
-        alert("Пароль обновлен в базе (не забудьте обновить его в Auth, если требуется полный доступ)");
+        const { error } = await _supabase.from('profiles').update({ raw_password: newPass }).eq('id', id);
+        if(error) alert("Ошибка: " + error.message);
+        else alert("Пароль обновлен в базе.");
         loadUsers();
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ
     async function deleteUser(id) {
-        if(confirm("Удалить сотрудника безвозвратно?")) {
-            await _supabase.from('profiles').delete().eq('id', id);
-            loadUsers();
+        if(confirm("Удалить сотрудника безвозвратно? (Это удалит только данные из таблицы. Для полной блокировки удалите пользователя в разделе Authentication в Supabase)")) {
+            const { error } = await _supabase
+                .from('profiles')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                console.error("Детали ошибки удаления:", error);
+                alert("Не удалось удалить: " + error.message + "\n\nПроверьте, добавлена ли политика DELETE для таблицы profiles в Supabase.");
+            } else {
+                alert("Данные сотрудника удалены.");
+                loadUsers();
+            }
         }
     }
 
