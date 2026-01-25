@@ -120,9 +120,9 @@
                 <tr>
                     <td><strong>${u.username}</strong><br><small style="color:var(--accent)">${u.role || ''}</small></td>
                     <td><span class="badge">${u.department || ''}</span></td>
-                    <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onclick="updateRight('${u.id}','can_use_mobile',${u.can_use_mobile})"></td>
-                    <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onclick="updateRight('${u.id}','is_signed',${u.is_signed})"></td>
-                    <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onclick="updateRight('${u.id}','can_view_acts',${u.can_view_acts})"></td>
+                    <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onclick="updateRight('${u.id}','can_use_mobile', ${u.can_use_mobile})"></td>
+                    <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onclick="updateRight('${u.id}','is_signed', ${u.is_signed})"></td>
+                    <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onclick="updateRight('${u.id}','can_view_acts', ${u.can_view_acts})"></td>
                     <td align="right">
                         <small style="color:#999; display:block; font-size:10px;">Ключ: ${u.raw_password || ''}</small>
                         <button class="btn-reset" onclick="resetPasswordPrompt('${u.id}', '${u.username}')">СБРОС</button>
@@ -133,17 +133,21 @@
     }
 
     async function updateRight(id, col, currentVal) {
-        const newVal = !currentVal; // Инвертируем значение
+        // Принудительно инвертируем значение, даже если пришел null или строка
+        const newVal = !Boolean(currentVal); 
         const up = { [col]: newVal };
         
-        console.log(`Обновление ${col}: ${currentVal} -> ${newVal}`);
+        console.log(`Запрос в БД: ${col} устанавливаем в ${newVal}`);
         
         const { error } = await _supabase.from('profiles').update(up).eq('id', id);
         
         if(error) {
-            alert("Ошибка базы данных: " + error.message);
+            console.error("Ошибка Supabase:", error);
+            alert("База отклонила изменение. Проверьте политики RLS в Supabase!\n\nОшибка: " + error.message);
         }
-        loadUsers(); // Перерисовываем список для подтверждения
+        
+        // Ждем обновления, чтобы данные в интерфейсе синхронизировались с БД
+        await loadUsers(); 
     }
 
     async function addUser() {
@@ -162,7 +166,7 @@
         if (data.user) {
             await _supabase.from('profiles').upsert({ 
                 id: data.user.id, username: login, role: role, department: dept,
-                can_view_acts: true, can_use_mobile: false, raw_password: pass 
+                can_view_acts: true, can_use_mobile: false, is_signed: false, raw_password: pass 
             });
             alert("Сотрудник зарегистрирован");
             loadUsers();
@@ -171,7 +175,6 @@
 
     async function deleteUser(id) {
         if(confirm("Удалить сотрудника навсегда?")) {
-            await _supabase.from('profiles').update({ can_view_acts: false, can_use_mobile: false, is_signed: false }).eq('id', id);
             await _supabase.from('profiles').delete().eq('id', id);
             loadUsers();
         }
@@ -181,7 +184,7 @@
         const p = prompt(`Новый пароль для ${name}:`);
         if(p && p.length >= 6) {
             await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
-            alert("Пароль обновлен в базе профилей");
+            alert("Пароль обновлен");
             loadUsers();
         }
     }
