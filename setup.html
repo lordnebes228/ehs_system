@@ -59,8 +59,10 @@
                     <option value="Начальник отдела">Начальник отдела</option>
                     <option value="Начальник цеха">Начальник цеха</option>
                     <option value="Назначенное лицо">Назначенное лицо</option>
+                    <option value="Наблюдатель">Наблюдатель (Только просмотр)</option>
                 </select>
                 <button class="btn-user" onclick="addUser()">ЗАРЕГИСТРИРОВАТЬ</button>
+                <p style="font-size: 11px; color: #666; margin-top: 10px;">* Лимит 2 чел. на отдел только для ролей «Начальник»</p>
             </div>
 
             <div class="table-wrapper">
@@ -133,20 +135,9 @@
     }
 
     async function updateRight(id, col, currentVal) {
-        // Принудительно инвертируем значение, даже если пришел null или строка
         const newVal = !Boolean(currentVal); 
-        const up = { [col]: newVal };
-        
-        console.log(`Запрос в БД: ${col} устанавливаем в ${newVal}`);
-        
-        const { error } = await _supabase.from('profiles').update(up).eq('id', id);
-        
-        if(error) {
-            console.error("Ошибка Supabase:", error);
-            alert("База отклонила изменение. Проверьте политики RLS в Supabase!\n\nОшибка: " + error.message);
-        }
-        
-        // Ждем обновления, чтобы данные в интерфейсе синхронизировались с БД
+        const { error } = await _supabase.from('profiles').update({ [col]: newVal }).eq('id', id);
+        if(error) alert("Ошибка: " + error.message);
         await loadUsers(); 
     }
 
@@ -155,21 +146,51 @@
         const pass = document.getElementById('newUserPass').value;
         const dept = document.getElementById('newUserDept').value;
         const role = document.getElementById('newUserRole').value;
+        
         if(!login || !pass || !dept) return alert("Заполните поля!");
 
-        const { count } = await _supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('department', dept);
-        if(count >= 2) return alert("Лимит 2 человека на подразделение достигнут!");
+        // Проверка лимита ТОЛЬКО для начальников
+        if (role.includes("Начальник")) {
+            const { count } = await _supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true })
+                .eq('department', dept)
+                .ilike('role', '%Начальник%'); // считаем только начальников в этом отделе
+
+            if(count >= 2) return alert("В данном подразделении уже есть 2 руководителя!");
+        }
 
         const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
         if(error) return alert(error.message);
 
         if (data.user) {
+            // Базовые настройки для разных ролей
+            let mobile = true;
+            let signed = true;
+            let view = true;
+
+            if (role === "Наблюдатель") {
+                mobile = false;
+                signed = false;
+                view = true;
+            }
+
             await _supabase.from('profiles').upsert({ 
-                id: data.user.id, username: login, role: role, department: dept,
-                can_view_acts: true, can_use_mobile: false, is_signed: false, raw_password: pass 
+                id: data.user.id, 
+                username: login, 
+                role: role, 
+                department: dept,
+                can_view_acts: view, 
+                can_use_mobile: mobile, 
+                is_signed: signed, 
+                raw_password: pass 
             });
             alert("Сотрудник зарегистрирован");
             loadUsers();
+            
+            // Очистка полей
+            document.getElementById('newUserLogin').value = '';
+            document.getElementById('newUserPass').value = '';
         }
     }
 
