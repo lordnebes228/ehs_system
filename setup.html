@@ -13,7 +13,22 @@
         h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; display: flex; align-items: center; gap: 10px; font-size: 22px; }
         .grid { display: grid; grid-template-columns: 380px 1fr; gap: 30px; }
         @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
+        
+        /* Стили для поля пароля с глазиком */
+        .pass-wrapper { position: relative; width: 100%; }
+        .toggle-pass { 
+            position: absolute; 
+            right: 12px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            cursor: pointer; 
+            color: #666; 
+            user-select: none;
+            font-size: 18px;
+        }
+
         button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; }
         .btn-dept { background: var(--accent); }
         .btn-user { background: var(--user-color); }
@@ -51,7 +66,12 @@
             <div style="background: #f0f7ff; padding: 15px; border-radius: 12px; border: 1px solid #d0e3f0;">
                 <h3>Новый сотрудник</h3>
                 <input type="text" id="newUserLogin" placeholder="Логин">
-                <input type="password" id="newUserPass" placeholder="Пароль">
+                
+                <div class="pass-wrapper">
+                    <input type="password" id="newUserPass" placeholder="Пароль">
+                    <span class="toggle-pass" onclick="togglePasswordVisibility()">👁</span>
+                </div>
+
                 <select id="newUserDept"><option value="">-- Выберите подразделение --</option></select>
                 <select id="newUserRole">
                     <option value="Инспектор">Инспектор</option>
@@ -89,6 +109,19 @@
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Функция переключения видимости пароля
+    function togglePasswordVisibility() {
+        const passInput = document.getElementById('newUserPass');
+        const icon = document.querySelector('.toggle-pass');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            icon.style.color = 'var(--accent)';
+        } else {
+            passInput.type = 'password';
+            icon.style.color = '#666';
+        }
+    }
 
     async function loadDepts() {
         const { data } = await _supabase.from('departments').select('*').order('name');
@@ -149,13 +182,12 @@
         
         if(!login || !pass || !dept) return alert("Заполните поля!");
 
-        // Проверка лимита ТОЛЬКО для начальников
         if (role.includes("Начальник")) {
             const { count } = await _supabase
                 .from('profiles')
                 .select('*', { count: 'exact', head: true })
                 .eq('department', dept)
-                .ilike('role', '%Начальник%'); // считаем только начальников в этом отделе
+                .ilike('role', '%Начальник%');
 
             if(count >= 2) return alert("В данном подразделении уже есть 2 руководителя!");
         }
@@ -164,7 +196,6 @@
         if(error) return alert(error.message);
 
         if (data.user) {
-            // Базовые настройки для разных ролей
             let mobile = true;
             let signed = true;
             let view = true;
@@ -188,7 +219,6 @@
             alert("Сотрудник зарегистрирован");
             loadUsers();
             
-            // Очистка полей
             document.getElementById('newUserLogin').value = '';
             document.getElementById('newUserPass').value = '';
         }
