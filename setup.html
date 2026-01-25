@@ -201,8 +201,17 @@
     async function updateRight(id, col, val) {
         const up = {}; 
         up[col] = val;
+        console.log(`Обновление: ${col} -> ${val}`);
+        
         const { error } = await _supabase.from('profiles').update(up).eq('id', id);
-        if(error) alert("Ошибка: " + error.message);
+        
+        if(error) {
+            console.error("Ошибка обновления прав:", error);
+            alert("Ошибка: " + error.message);
+            loadUsers(); 
+        } else {
+            // Опционально: loadUsers(); для подтверждения синхронизации
+        }
     }
 
     async function addUser() {
@@ -247,14 +256,14 @@
 
     async function deleteUser(id) {
         if(confirm("ВНИМАНИЕ! Полное удаление сотрудника и блокировка доступа. Продолжить?")) {
-            // 1. Принудительно отключаем доступы в профиле перед удалением
+            // 1. Мгновенная блокировка всех доступов (на случай задержки удаления)
             await _supabase.from('profiles').update({ 
                 can_view_acts: false, 
                 can_use_mobile: false,
                 is_signed: false 
             }).eq('id', id);
 
-            // 2. Удаляем сам профиль
+            // 2. Удаление записи
             const { error } = await _supabase.from('profiles').delete().eq('id', id);
             
             if(error) alert("Ошибка при удалении: " + error.message);
