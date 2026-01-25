@@ -30,13 +30,25 @@
         .auth-card { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .act-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; }
 
+        /* СТИЛИ МОДАЛЬНОГО ОКНА (ПРЕДПИСАНИЕ) */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
-        .prescription-blank { background: white; margin: 20px auto; padding: 40px 50px; width: 210mm; min-height: 297mm; color: #000; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .prescription-blank { 
+            background: white; margin: 20px auto; padding: 40px 50px; 
+            width: 210mm; min-height: 297mm; color: #000; position: relative; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: "Times New Roman", serif;
+            line-height: 1.2;
+        }
         
+        .p-table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
+        .p-table th, .p-table td { border: 1px solid black; padding: 8px; font-size: 13px; word-wrap: break-word; vertical-align: top; }
+        
+        .sig-block { margin-top: 40px; display: flex; justify-content: space-between; }
+        .sig-item { width: 45%; border-top: 1px solid black; padding-top: 5px; text-align: center; font-size: 12px; margin-top: 50px; }
+
         @media print {
             body { background: none; padding: 0; }
             .container, .modal, .no-print { display: none !important; }
-            .prescription-blank { margin: 0; width: 100%; box-shadow: none; }
+            .prescription-blank { margin: 0; width: 100%; box-shadow: none; border: none; }
         }
     </style>
 </head>
@@ -44,8 +56,8 @@
 
 <div id="loginForm" class="auth-card" style="display: none;">
     <h1 style="color: var(--primary);">EHS Мониторинг</h1>
-    <input type="text" id="userLogin" placeholder="Логин" style="width:100%; margin-bottom: 15px;">
-    <input type="password" id="userPass" placeholder="Пароль" style="width:100%;">
+    <input type="text" id="userLogin" placeholder="Логин">
+    <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px; width:100%; box-sizing:border-box;">
     <button onclick="signIn()" style="width: 100%; margin-top: 25px; background: var(--accent); color:white; height: 50px;">ВОЙТИ</button>
 </div>
 
@@ -59,7 +71,7 @@
         </div>
 
         <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px;">
-            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по объекту или нарушению..." oninput="loadActs()">
+            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по объекту, цеху или нарушению..." oninput="loadActs()">
             <select id="statusFilter" onchange="loadActs()">
                 <option value="all">Все акты</option>
                 <option value="signed">✅ Подписанные</option>
@@ -72,9 +84,9 @@
                 <thead>
                     <tr>
                         <th>Дата</th>
+                        <th>Цех / Отдел</th>
                         <th>Объект / Место</th>
                         <th>Фото</th>
-                        <th>Отдел</th>
                         <th>Описание</th>
                         <th>Статус</th>
                     </tr>
@@ -87,37 +99,63 @@
 
 <div id="actModal" class="modal">
     <div class="prescription-blank" id="printableArea">
-        <button class="no-print" onclick="closeAct()" style="position:absolute; top:10px; right:10px;">✕</button>
-        <button class="no-print" onclick="window.print()" style="position:absolute; top:10px; right:60px; background:var(--accent); color:white;">ПЕЧАТЬ</button>
+        <button class="no-print" onclick="closeAct()" style="position:absolute; top:10px; right:10px; background:#eee; border-radius:50%; width:30px; height:30px;">✕</button>
+        <button class="no-print" onclick="window.print()" style="position:absolute; top:10px; right:60px; background:var(--accent); color:white; padding:5px 15px; border-radius:5px;">ПЕЧАТЬ (PDF)</button>
         
-        <div style="font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px;">УПРАВЛЕНИЕ ПБ, ОТ и ОС</div>
-        <div style="text-align: center; font-weight: bold; font-size: 22px; margin: 20px 0;">ПРЕДПИСАНИЕ</div>
-        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 15px;">
+        <div style="font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; font-size: 14px;">
+            УПРАВЛЕНИЕ ПРОМЫШЛЕННОЙ БЕЗОПАСНОСТИ, ОХРАНЫ ТРУДА И ОКРУЖАЮЩЕЙ СРЕДЫ
+        </div>
+        
+        <div style="text-align: center; font-weight: bold; font-size: 24px; margin: 30px 0 10px 0;">ПРЕДПИСАНИЕ</div>
+        
+        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 20px; font-size: 16px;">
             <div>№ <span id="pNumber"></span></div>
             <div>дата: <span id="pDate"></span></div>
         </div>
-        
-        <p>В ходе контроля выявлены нарушения:</p>
-        <table style="width:100%; border-collapse: collapse; border: 1px solid black;">
-            <tr style="border: 1px solid black; background: #eee;">
-                <th style="border: 1px solid black; padding: 5px;">Место / Нарушение</th>
-                <th style="border: 1px solid black; padding: 5px;">Нормативный документ</th>
-                <th style="border: 1px solid black; padding: 5px;">Мероприятия</th>
-            </tr>
-            <tr>
-                <td id="pMainInfo" style="border: 1px solid black; padding: 10px; vertical-align: top;"></td>
-                <td id="pLaw" style="border: 1px solid black; padding: 10px; vertical-align: top;"></td>
-                <td id="pTask" style="border: 1px solid black; padding: 10px; vertical-align: top;"></td>
-            </tr>
+
+        <p style="font-size: 15px; text-indent: 30px; text-align: justify;">
+            В ходе осуществления ежедневного контроля <b id="pDateText"></b>г. были выявлены нарушения требований 
+            нормативных актов в подразделении <b id="pDeptText"></b>:
+        </p>
+
+        <table class="p-table">
+            <thead>
+                <tr>
+                    <th style="width: 35px;">№ п/п</th>
+                    <th>Перечень выявленных нарушений (Место)</th>
+                    <th>Наименование нормативного документа и пункта (статьи)</th>
+                    <th>Мероприятия по устранению</th>
+                    <th style="width: 90px;">Сроки устранения</th>
+                </tr>
+            </thead>
+            <tbody id="pTableBody">
+                </tbody>
         </table>
 
-        <div style="margin-top: 50px; display: flex; justify-content: space-between;">
-            <div style="border-top: 1px solid black; width: 200px; text-align: center; font-size: 12px;">Выдал (Инспектор)</div>
-            <div style="border-top: 1px solid black; width: 200px; text-align: center; font-size: 12px;">Получил (Нач. цеха)</div>
+        <p style="font-size: 13px; line-height: 1.4; margin-top: 25px;">
+            Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки и могут отменяться только генеральным директором Общества.
+        </p>
+        <p style="font-size: 13px; line-height: 1.4;">
+            По истечении указанных сроков устранения о выполнении сообщать в Управление промышленной безопасности, охраны труда и окружающей среды.
+        </p>
+
+        <div class="sig-block">
+            <div class="sig-item">
+                <b>И.о. начальника управления / УПБ, ОТ и ОС</b><br>
+                <small>(А.Б. Носов)</small>
+            </div>
+            <div class="sig-item" id="recipientSig">
+                <b>Предписание получил (Нач. цеха)</b><br>
+                <small id="recipientStatus">(Ожидает подписи в системе)</small>
+            </div>
         </div>
 
-        <div id="pSignAction" class="no-print" style="text-align: center; margin-top: 30px;"></div>
-        <div id="pPhotos" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 30px;"></div>
+        <div id="pSignAction" class="no-print" style="text-align: center; margin-top: 40px;"></div>
+        
+        <div style="page-break-before: always; margin-top: 40px;">
+            <div style="font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 15px;" class="no-print">Фотофиксация нарушений:</div>
+            <div id="pPhotos" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"></div>
+        </div>
     </div>
 </div>
 
@@ -128,13 +166,9 @@
     
     let currentUser = null;
 
-    // Слушатель событий авторизации (срабатывает при загрузке страницы автоматически)
     _supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-            checkSession();
-        } else if (event === 'SIGNED_OUT') {
-            showLogin(true);
-        }
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') checkSession();
+        else if (event === 'SIGNED_OUT') showLogin(true);
     });
 
     function showLogin(show) {
@@ -145,47 +179,20 @@
     async function signIn() {
         const login = document.getElementById('userLogin').value.trim();
         const pass = document.getElementById('userPass').value;
-        const { data, error } = await _supabase.auth.signInWithPassword({ 
-            email: login + "@ssk.local", 
-            password: pass 
-        });
+        const { error } = await _supabase.auth.signInWithPassword({ email: login + "@ssk.local", password: pass });
         if (error) alert("Ошибка: " + error.message);
     }
 
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
-        if (!session) {
-            showLogin(true);
-            return;
-        }
+        if (!session) { showLogin(true); return; }
 
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
         if (!profile) return;
-        
         currentUser = profile;
-
-        // Проверка устройства
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (profile.can_use_mobile && !profile.can_view_acts && !isMobileDevice) {
-            alert("Доступ разрешен только с мобильных устройств.");
-            await signOut();
-            return;
-        }
-
-        if (!profile.can_view_acts && !profile.can_manage_users) {
-            alert("У вас нет прав доступа.");
-            await signOut();
-            return;
-        }
-
         showLogin(false);
         document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
-        
-        if (profile.can_manage_users) { 
-            document.getElementById('adminBtn').style.display = 'flex'; 
-        }
-        
+        if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
         loadActs();
     }
 
@@ -196,7 +203,7 @@
 
         if (data) {
             const filtered = data.filter(a => {
-                const matchSearch = (a.location + (a.violation_desc || "")).toLowerCase().includes(searchTerm);
+                const matchSearch = ((a.location || "") + (a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(searchTerm);
                 const matchStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? a.is_signed : !a.is_signed);
                 return matchSearch && matchStatus;
             });
@@ -206,11 +213,11 @@
                 return `
                 <tr onclick='openAct(${JSON.stringify(a)})'>
                     <td>${new Date(a.created_at).toLocaleDateString()}</td>
+                    <td><span style="background:#eee; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${a.target_shop || '—'}</span></td>
                     <td><b>${a.location}</b></td>
                     <td>${photos[0] ? `<img src="${photos[0]}" class="act-thumb">` : '—'}</td>
-                    <td>${a.created_by_dept || '—'}</td>
-                    <td>${(a.violation_desc || "").substring(0, 50)}...</td>
-                    <td>${a.is_signed ? '✅' : '⏳'}</td>
+                    <td style="font-size:12px; color:#666;">${(a.violation_desc || "").substring(0, 50)}...</td>
+                    <td align="center">${a.is_signed ? '✅' : '⏳'}</td>
                 </tr>`;
             }).join('');
         }
@@ -218,28 +225,53 @@
 
     function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
-        document.getElementById('pNumber').innerText = act.id.substring(0,6).toUpperCase();
-        document.getElementById('pDate').innerText = new Date(act.created_at).toLocaleDateString();
-        document.getElementById('pMainInfo').innerHTML = `<b>Место:</b> ${act.location}<br><br><b>Нарушение:</b> ${act.violation_desc}`;
+        const dateStr = new Date(act.created_at).toLocaleDateString();
         
-        document.getElementById('pSignAction').innerHTML = (!act.is_signed && currentUser.is_signed) 
-            ? `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px;">ПОДПИСАТЬ</button>` : '';
+        document.getElementById('pNumber').innerText = act.id.substring(0,6).toUpperCase();
+        document.getElementById('pDate').innerText = dateStr;
+        document.getElementById('pDateText').innerText = dateStr;
+        document.getElementById('pDeptText').innerText = act.target_shop || "—";
+
+        // Заполнение таблицы
+        document.getElementById('pTableBody').innerHTML = `
+            <tr>
+                <td align="center">1</td>
+                <td><b>${act.location}</b><br>${(act.violation_desc || "").split('\n')[1] || ""}</td>
+                <td>${(act.violation_desc || "").split('\n')[0] || "Согласно нормам ПБ"}</td>
+                <td>Устранить выявленное нарушение</td>
+                <td align="center">3 дня</td>
+            </tr>
+        `;
+
+        // Статус подписи
+        if(act.is_signed) {
+            document.getElementById('recipientStatus').innerText = "(ПОДПИСАНО ЭЦП)";
+            document.getElementById('recipientStatus').style.color = "green";
+            document.getElementById('pSignAction').innerHTML = "";
+        } else {
+            document.getElementById('recipientStatus').innerText = "(Ожидает подписи)";
+            document.getElementById('recipientStatus').style.color = "red";
+            
+            // Если у текущего юзера есть право подписи (Начальник)
+            if(currentUser.is_signed) {
+                document.getElementById('pSignAction').innerHTML = `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px; border-radius:10px; font-size:18px;">ПОДПИСАТЬ ПРЕДПИСАНИЕ</button>`;
+            } else {
+                document.getElementById('pSignAction').innerHTML = "";
+            }
+        }
 
         let photos = []; try { photos = JSON.parse(act.image_urls || "[]"); } catch(e) {}
         document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc;">`).join('');
     }
 
     async function signAct(id) {
+        if(!confirm("Вы подтверждаете устранение или ознакомление с предписанием?")) return;
         await _supabase.from('acts').update({ is_signed: true }).eq('id', id);
         closeAct(); loadActs();
     }
 
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    
-    async function signOut() { 
-        await _supabase.auth.signOut(); 
-        location.reload(); 
-    }
+    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
 </script>
 </body>
 </html>
