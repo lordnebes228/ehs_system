@@ -36,19 +36,21 @@
             background: white; margin: 20px auto; padding: 40px 50px; 
             width: 210mm; min-height: 297mm; color: #000; position: relative; 
             box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: "Times New Roman", serif;
-            line-height: 1.2;
+            line-height: 1.2; box-sizing: border-box;
         }
         
+        /* Исправление: таблица больше не выходит за рамки */
         .p-table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
         .p-table th, .p-table td { border: 1px solid black; padding: 8px; font-size: 13px; word-wrap: break-word; vertical-align: top; }
         
-        .sig-block { margin-top: 40px; display: flex; justify-content: space-between; }
-        .sig-item { width: 45%; border-top: 1px solid black; padding-top: 5px; text-align: center; font-size: 12px; margin-top: 50px; }
+        .sig-block { margin-top: 30px; }
+        .sig-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; }
+        .sig-line { border-bottom: 1px solid black; width: 150px; text-align: center; font-size: 10px; margin: 0 10px; }
 
         @media print {
             body { background: none; padding: 0; }
             .container, .modal, .no-print { display: none !important; }
-            .prescription-blank { margin: 0; width: 100%; box-shadow: none; border: none; }
+            .prescription-blank { margin: 0; width: 100%; box-shadow: none; border: none; padding: 20px; }
         }
     </style>
 </head>
@@ -139,13 +141,22 @@
         </p>
 
         <div class="sig-block">
-            <div class="sig-item">
-                <b>И.о. начальника управления / УПБ, ОТ и ОС</b><br>
-                <small>(А.Б. Носов)</small>
+            <div class="sig-row">
+                <div style="width: 50%;"><b>И.о. начальника управления / УПБ, ОТ и ОС</b></div>
+                <div class="sig-line">(подпись)</div>
+                <div style="width: 30%; text-align: right;"><b>(А.Б. Носов)</b></div>
             </div>
-            <div class="sig-item" id="recipientSig">
-                <b>Предписание получил (Нач. цеха)</b><br>
-                <small id="recipientStatus">(Ожидает подписи в системе)</small>
+
+            <div class="sig-row" style="margin-top: 50px;">
+                <div style="width: 40%;">
+                    <b>Предписание получил:</b><br>
+                    <div style="border-bottom: 1px solid black; margin-top: 15px; font-size: 10px; text-align: center;">(дата, отметка о получении)</div>
+                </div>
+                <div style="width: 50%;">
+                    <br>
+                    <div style="border-bottom: 1px solid black; margin-top: 15px; font-size: 10px; text-align: center;">(Ф.И.О., должность)</div>
+                    <div id="recipientStatus" style="font-size: 11px; text-align: center; margin-top: 5px;"></div>
+                </div>
             </div>
         </div>
 
@@ -196,7 +207,14 @@
     }
 
     async function loadActs() {
-        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        // ДОБАВЛЕН ФИЛЬТР: Если юзер не админ и не инспектор, показываем только is_delivered = true
+        let query = _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        
+        if (currentUser && !currentUser.can_manage_users && currentUser.role !== 'inspector') {
+            query = query.eq('is_delivered', true);
+        }
+
+        const { data } = await query;
         const searchTerm = document.getElementById('actSearch').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
 
@@ -231,34 +249,30 @@
         document.getElementById('pDateText').innerText = dateStr;
         document.getElementById('pDeptText').innerText = act.target_shop || "—";
 
-        // ЛОГИКА РАЗДЕЛЕНИЯ ТЕКСТА (из мобильного приложения приходят Статья и Описание через \n)
         const parts = (act.violation_desc || "").split('\n');
         const lawPart = parts[0] || "Согласно нормам ПБ";
         const descPart = parts.slice(1).join('\n') || "Нарушение требований безопасности";
 
-        // Заполнение таблицы данными из базы
         document.getElementById('pTableBody').innerHTML = `
             <tr>
                 <td align="center">1</td>
                 <td><b>${act.location}</b><br>${descPart}</td>
                 <td>${lawPart}</td>
-                <td>${act.corrective_action || "Устранить выявленное нарушение в кратчайшие сроки"}</td>
-                <td align="center">${act.deadline || "—"}</td>
+                <td>${act.corrective_action || "Устранить выявленное нарушение"}</td>
+                <td align="center">${act.deadline || "3 дня"}</td>
             </tr>
         `;
 
-        // Статус подписи
         if(act.is_signed) {
-            document.getElementById('recipientStatus').innerText = "(ПОДПИСАНО ЭЦП)";
+            document.getElementById('recipientStatus').innerText = "(ПОДПИСАНО В СИСТЕМЕ)";
             document.getElementById('recipientStatus').style.color = "green";
             document.getElementById('pSignAction').innerHTML = "";
         } else {
-            document.getElementById('recipientStatus').innerText = "(Ожидает подписи)";
+            document.getElementById('recipientStatus').innerText = "(Ожидает ознакомления)";
             document.getElementById('recipientStatus').style.color = "red";
             
-            // Если у текущего юзера есть право подписи
             if(currentUser && currentUser.is_signed) {
-                document.getElementById('pSignAction').innerHTML = `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px; border-radius:10px; font-size:18px;">ПОДПИСАТЬ ПРЕДПИСАНИЕ</button>`;
+                document.getElementById('pSignAction').innerHTML = `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px; border-radius:10px; font-size:18px;">ПОДТВЕРДИТЬ ПОЛУЧЕНИЕ</button>`;
             } else {
                 document.getElementById('pSignAction').innerHTML = "";
             }
@@ -269,7 +283,7 @@
     }
 
     async function signAct(id) {
-        if(!confirm("Вы подтверждаете устранение или ознакомление с предписанием?")) return;
+        if(!confirm("Вы подтверждаете получение предписания и ознакомление с нарушениями?")) return;
         await _supabase.from('acts').update({ is_signed: true }).eq('id', id);
         closeAct(); loadActs();
     }
