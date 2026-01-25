@@ -128,8 +128,7 @@
                     <th style="width: 90px;">Сроки устранения</th>
                 </tr>
             </thead>
-            <tbody id="pTableBody">
-                </tbody>
+            <tbody id="pTableBody"></tbody>
         </table>
 
         <p style="font-size: 13px; line-height: 1.4; margin-top: 25px;">
@@ -232,14 +231,19 @@
         document.getElementById('pDateText').innerText = dateStr;
         document.getElementById('pDeptText').innerText = act.target_shop || "—";
 
-        // Заполнение таблицы
+        // ЛОГИКА РАЗДЕЛЕНИЯ ТЕКСТА (из мобильного приложения приходят Статья и Описание через \n)
+        const parts = (act.violation_desc || "").split('\n');
+        const lawPart = parts[0] || "Согласно нормам ПБ";
+        const descPart = parts.slice(1).join('\n') || "Нарушение требований безопасности";
+
+        // Заполнение таблицы данными из базы
         document.getElementById('pTableBody').innerHTML = `
             <tr>
                 <td align="center">1</td>
-                <td><b>${act.location}</b><br>${(act.violation_desc || "").split('\n')[1] || ""}</td>
-                <td>${(act.violation_desc || "").split('\n')[0] || "Согласно нормам ПБ"}</td>
-                <td>Устранить выявленное нарушение</td>
-                <td align="center">3 дня</td>
+                <td><b>${act.location}</b><br>${descPart}</td>
+                <td>${lawPart}</td>
+                <td>${act.corrective_action || "Устранить выявленное нарушение в кратчайшие сроки"}</td>
+                <td align="center">${act.deadline || "—"}</td>
             </tr>
         `;
 
@@ -252,8 +256,8 @@
             document.getElementById('recipientStatus').innerText = "(Ожидает подписи)";
             document.getElementById('recipientStatus').style.color = "red";
             
-            // Если у текущего юзера есть право подписи (Начальник)
-            if(currentUser.is_signed) {
+            // Если у текущего юзера есть право подписи
+            if(currentUser && currentUser.is_signed) {
                 document.getElementById('pSignAction').innerHTML = `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:15px 40px; border-radius:10px; font-size:18px;">ПОДПИСАТЬ ПРЕДПИСАНИЕ</button>`;
             } else {
                 document.getElementById('pSignAction').innerHTML = "";
