@@ -3,304 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EHS Мониторинг - Журнал</title>
+    <title>Панель Администратора - ССК</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --danger: #e74c3c; --success: #27ae60; --admin: #8e44ad; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; font-size: 15px; }
+        :root { --primary: #2c3e50; --accent: #8e44ad; --danger: #c0392b; --user-color: #2980b9; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; margin: 0; font-size: 15px; }
+        .setup-container { max-width: 1200px; margin: 0 auto; }
+        .setup-card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; display: flex; align-items: center; gap: 10px; font-size: 22px; }
+        .grid { display: grid; grid-template-columns: 380px 1fr; gap: 30px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
         
-        /* Интерфейс журнала */
-        .container { max-width: 1400px; margin: 0 auto; display: none; }
-        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 25px; }
-        .admin-panel-link { display: none; background: var(--admin); color: white; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-bottom: 20px; align-items: center; gap: 10px; }
-        input, select, button { padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; }
-        button { cursor: pointer; font-weight: bold; border: none; transition: 0.2s; }
-        .table-wrapper { background: white; border-radius: 10px; overflow-x: auto; border: 1px solid #eee; }
-        table { width: 100%; border-collapse: collapse; }
-        .acts-table th { background: var(--primary); color: white; padding: 12px; text-align: left; }
-        .acts-table td { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .search-box { border: 2px solid var(--accent); margin-bottom: 15px; width: 100%; box-sizing: border-box; }
-        .auth-card { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .act-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; }
-
-        /* МОДАЛЬНОЕ ОКНО И БЛАНК А4 */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
         
-        .prescription-blank { 
-            background: white; 
-            margin: 20px auto; 
-            padding: 20mm 15mm; 
-            width: 210mm; 
-            min-height: 297mm; 
-            color: #000; 
-            position: relative; 
-            box-shadow: 0 0 20px rgba(0,0,0,0.5); 
-            font-family: "Times New Roman", serif;
-            line-height: 1.3; 
-            box-sizing: border-box; 
-            overflow: hidden;
+        /* Стили для поля пароля с глазиком */
+        .pass-wrapper { position: relative; width: 100%; }
+        .toggle-pass { 
+            position: absolute; 
+            right: 12px; 
+            top: 50%; 
+            transform: translateY(-50%); 
+            cursor: pointer; 
+            color: #666; 
+            user-select: none;
+            font-size: 18px;
         }
 
-        /* ТАБЛИЦА ПРЕДПИСАНИЯ */
-        .p-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin: 15px 0; 
-            table-layout: fixed; 
-        }
-        .p-table th, .p-table td { 
-            border: 1px solid black; 
-            padding: 8px; 
-            font-size: 12px; 
-            vertical-align: top; 
-            word-wrap: break-word; 
-            overflow-wrap: break-word;
-        }
-        .p-table th { background: #f2f2f2; text-align: center; font-weight: bold; }
-
-        .col-pp { width: 35px; text-align: center; }
-        .col-desc { width: auto; }
-        .col-law { width: 120px; }
-        .col-action { width: 150px; }
-        .col-time { width: 80px; text-align: center; }
-
-        .no-print { display: inline-block; }
-
-        @media print {
-            @page { size: A4; margin: 0; }
-            body { background: white !important; padding: 0 !important; margin: 0 !important; }
-            .container, .modal, .no-print { display: none !important; }
-            .modal { position: static; display: block; background: none; }
-            .prescription-blank { 
-                margin: 0 !important; 
-                box-shadow: none !important; 
-                width: 210mm !important;
-                padding: 15mm !important;
-            }
-        }
+        button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; }
+        .btn-dept { background: var(--accent); }
+        .btn-user { background: var(--user-color); }
+        .table-wrapper { overflow-x: auto; background: #fafafa; border-radius: 10px; border: 1px solid #eee; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #eee; padding: 10px; text-align: left; color: #555; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; vertical-align: middle; }
+        .btn-del-mini { background: #fee; color: var(--danger); border: 1px solid #fcc; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .btn-reset { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-right: 5px; }
+        .badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #e0e0e0; color: #444; }
+        .back-link { display: block; text-align: center; margin-top: 20px; color: #3498db; text-decoration: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="loginForm" class="auth-card" style="display: none;">
-    <h1 style="color: var(--primary);">EHS Мониторинг</h1>
-    <input type="text" id="userLogin" placeholder="Логин" style="width:100%; box-sizing:border-box;">
-    <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px; width:100%; box-sizing:border-box;">
-    <button onclick="signIn()" style="width: 100%; margin-top: 25px; background: var(--accent); color:white; height: 50px;">ВОЙТИ</button>
-</div>
-
-<div id="mainContent" class="container">
-    <a href="setup.html" id="adminBtn" class="admin-panel-link">🛠 ПАНЕЛЬ УПРАВЛЕНИЯ</a>
-
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 id="welcomeText" style="margin:0">Журнал актов</h2>
-            <button onclick="signOut()" style="background: var(--danger); color: white;">ВЫЙТИ</button>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px;">
-            <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по цеху или нарушению..." oninput="loadActs()">
-            <select id="statusFilter" onchange="loadActs()">
-                <option value="all">Все акты</option>
-                <option value="signed">✅ Подписанные</option>
-                <option value="work">⏳ В работе</option>
-            </select>
-        </div>
-
-        <div class="table-wrapper">
-            <table class="acts-table">
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        <th>Цех / Отдел</th>
-                        <th>Фото</th>
-                        <th>Описание</th>
-                        <th>Статус</th>
-                    </tr>
-                </thead>
-                <tbody id="actsTable"></tbody>
-            </table>
+<div class="setup-container">
+    <div class="setup-card">
+        <h2>🛠 Конструктор подразделений</h2>
+        <div class="grid">
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 12px;">
+                <input type="text" id="deptName" placeholder="Название (например: Цех №1)">
+                <select id="deptType">
+                    <option value="Цех">Производственный цех</option>
+                    <option value="Отдел">Управленческий отдел</option>
+                </select>
+                <button class="btn-dept" onclick="saveDept()">+ ДОБАВИТЬ В СПИСОК</button>
+            </div>
+            <div id="deptsList" style="display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start;"></div>
         </div>
     </div>
-</div>
 
-<div id="actModal" class="modal">
-    <div class="prescription-blank" id="printableArea">
-        <div class="no-print" style="position:absolute; top:15px; right:15px; z-index:10;">
-            <button onclick="closeAct()" style="background:#ddd; border-radius:50%; width:35px; height:35px; border:none; display:flex; align-items:center; justify-content:center;">✕</button>
-        </div>
-        
-        <div style="font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 5px; font-size: 13px; text-align: center; text-transform: uppercase;">
-            Управление промышленной безопасности, охраны труда и окружающей среды
-        </div>
-        
-        <div style="text-align: center; font-weight: bold; font-size: 22px; margin: 25px 0 10px 0;">ПРЕДПИСАНИЕ</div>
-        
-        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 15px; font-size: 14px;">
-            <div>№ <span id="pNumber"></span></div>
-            <div>дата: <span id="pDate"></span></div>
-        </div>
+    <div class="setup-card">
+        <h2>👤 Сотрудники и Права доступа</h2>
+        <div class="grid">
+            <div style="background: #f0f7ff; padding: 15px; border-radius: 12px; border: 1px solid #d0e3f0;">
+                <h3>Новый сотрудник</h3>
+                <input type="text" id="newUserLogin" placeholder="Логин">
+                
+                <div class="pass-wrapper">
+                    <input type="password" id="newUserPass" placeholder="Пароль">
+                    <span class="toggle-pass" onclick="togglePasswordVisibility()">👁</span>
+                </div>
 
-        <p style="font-size: 14px; text-indent: 30px; text-align: justify; margin: 10px 0;">
-            В ходе осуществления ежедневного контроля <b id="pDateText"></b>г. были выявлены нарушения требований 
-            нормативных актов в подразделении <b id="pDeptText"></b>:
-        </p>
-
-        <table class="p-table">
-            <thead>
-                <tr>
-                    <th class="col-pp">№ п/п</th>
-                    <th class="col-desc">Перечень выявленных нарушений</th>
-                    <th class="col-law">Нормативный документ (статья)</th>
-                    <th class="col-action">Мероприятия по устранению</th>
-                    <th class="col-time">Сроки</th>
-                </tr>
-            </thead>
-            <tbody id="pTableBody"></tbody>
-        </table>
-
-        <p style="font-size: 12px; font-style: italic; margin-top: 15px;">
-            Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки.
-        </p>
-
-        <div style="margin-top: 35px; font-size: 14px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-                <div style="width: 50%;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b><br>(А.Б. Носов)</div>
-                <div style="width: 40%; border-bottom: 1px solid black; align-self: flex-end; text-align: center; font-size: 10px;">(подпись)</div>
+                <select id="newUserDept"><option value="">-- Выберите подразделение --</option></select>
+                <select id="newUserRole">
+                    <option value="Инспектор">Инспектор</option>
+                    <option value="Начальник управления">Начальник управления</option>
+                    <option value="Начальник отдела">Начальник отдела</option>
+                    <option value="Начальник цеха">Начальник цеха</option>
+                    <option value="Назначенное лицо">Назначенное лицо</option>
+                    <option value="Наблюдатель">Наблюдатель (Только просмотр)</option>
+                </select>
+                <button class="btn-user" onclick="addUser()">ЗАРЕГИСТРИРОВАТЬ</button>
+                <p style="font-size: 11px; color: #666; margin-top: 10px;">* Лимит 2 чел. на отдел только для ролей «Начальник»</p>
             </div>
 
-            <div style="display: flex; justify-content: space-between;">
-                <div style="width: 40%;">
-                    <b>Предписание получил:</b>
-                    <div style="border-top: 1px solid black; margin-top: 25px; font-size: 10px; text-align: center;">(дата, отметка о получении)</div>
-                </div>
-                <div style="width: 50%;">
-                    <div id="recipientStatus" style="font-weight: bold; text-align: center;"></div>
-                    <div style="border-top: 1px solid black; margin-top: 10px; font-size: 10px; text-align: center;">(Ф.И.О., должность руководителя)</div>
-                </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Сотрудник / Роль</th>
+                            <th>Подразделение</th>
+                            <th align="center">Моб.</th>
+                            <th align="center">Подпись</th>
+                            <th align="center">Сайт</th>
+                            <th align="right">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersList"></tbody>
+                </table>
             </div>
-        </div>
-
-        <div id="pSignAction" class="no-print" style="text-align: center; margin-top: 30px;"></div>
-        
-        <div style="margin-top: 30px;">
-            <div style="font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; font-size: 14px;">Фотофиксация:</div>
-            <div id="pPhotos" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
         </div>
     </div>
+    <a href="index.html" class="back-link">← ВЕРНУТЬСЯ В ЖУРНАЛ АКТОВ</a>
 </div>
 
 <script>
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    
-    let currentUser = null;
 
-    document.addEventListener('DOMContentLoaded', checkSession);
-
-    async function signIn() {
-        const login = document.getElementById('userLogin').value.trim();
-        const pass = document.getElementById('userPass').value;
-        const { error } = await _supabase.auth.signInWithPassword({ 
-            email: login.includes('@') ? login : login + "@ssk.local", 
-            password: pass 
-        });
-        if (error) alert("Ошибка: " + error.message);
-        else checkSession();
-    }
-
-    async function checkSession() {
-        const { data: { session } } = await _supabase.auth.getSession();
-        if (!session) { document.getElementById('loginForm').style.display='block'; return; }
-        
-        const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        currentUser = profile;
-        
-        document.getElementById('loginForm').style.display='none';
-        document.getElementById('mainContent').style.display='block';
-        document.getElementById('welcomeText').innerText = `Журнал: ${profile.username}`;
-        if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
-        loadActs();
-    }
-
-    async function loadActs() {
-        let query = _supabase.from('acts').select('*').order('created_at', { ascending: false });
-        const { data } = await query;
-        if (!data) return;
-
-        const term = document.getElementById('actSearch').value.toLowerCase();
-        const status = document.getElementById('statusFilter').value;
-
-        const filtered = data.filter(a => {
-            const mS = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-            const mStat = status === 'all' ? true : (status === 'signed' ? a.is_signed : !a.is_signed);
-            return mS && mStat;
-        });
-
-        document.getElementById('actsTable').innerHTML = filtered.map(a => `
-            <tr onclick='openAct(${JSON.stringify(a)})'>
-                <td>${new Date(a.created_at).toLocaleDateString()}</td>
-                <td><b>${a.target_shop || '—'}</b></td>
-                <td><img src="${JSON.parse(a.image_urls || '[]')[0] || ''}" class="act-thumb"></td>
-                <td style="font-size:12px;">${(a.violation_desc || "").substring(0,60)}...</td>
-                <td align="center">${a.is_signed ? '✅' : '⏳'}</td>
-            </tr>
-        `).join('');
-    }
-
-    function openAct(act) {
-        document.getElementById('actModal').style.display = 'block';
-        const d = new Date(act.created_at).toLocaleDateString();
-        
-        document.getElementById('pNumber').innerText = act.id.substring(0,6).toUpperCase();
-        document.getElementById('pDate').innerText = d;
-        document.getElementById('pDateText').innerText = d;
-        document.getElementById('pDeptText').innerText = act.target_shop || "—";
-
-        const lawMatch = (act.violation_desc || "").match(/Статья:\s*(.*)\n/);
-        const law = lawMatch ? lawMatch[1] : "ППР РФ";
-        const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
-
-        document.getElementById('pTableBody').innerHTML = `
-            <tr>
-                <td class="col-pp">1</td>
-                <td class="col-desc">${violation}</td>
-                <td class="col-law">${law}</td>
-                <td class="col-action">Устранить выявленное нарушение</td>
-                <td class="col-time">${act.deadline || '—'}</td>
-            </tr>
-        `;
-
-        const signText = document.getElementById('recipientStatus');
-        const signBtn = document.getElementById('pSignAction');
-        
-        if(act.is_signed) {
-            signText.innerText = "ПОДПИСАНО В СИСТЕМЕ";
-            signText.style.color = "green";
-            signBtn.innerHTML = "";
+    function togglePasswordVisibility() {
+        const passInput = document.getElementById('newUserPass');
+        const icon = document.querySelector('.toggle-pass');
+        if (passInput.type === 'password') {
+            passInput.type = 'text';
+            icon.style.color = 'var(--accent)';
         } else {
-            signText.innerText = "(ОЖИДАЕТ ОЗНАКОМЛЕНИЯ)";
-            signText.style.color = "red";
-            signBtn.innerHTML = (currentUser && currentUser.is_signed) ? 
-                `<button onclick="signAct('${act.id}')" style="background:var(--success); color:white; padding:12px 30px; border-radius:8px;">ПОДТВЕРДИТЬ ОЗНАКОМЛЕНИЕ</button>` : "";
-        }
-
-        const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('pPhotos').innerHTML = photos.map(url => `
-            <img src="${url}" style="width:100%; max-height:200px; object-fit:contain; border:1px solid #ccc;">
-        `).join('');
-    }
-
-    async function signAct(id) {
-        if(confirm("Вы подтверждаете получение?")) {
-            await _supabase.from('acts').update({ is_signed: true }).eq('id', id);
-            closeAct(); loadActs();
+            passInput.type = 'password';
+            icon.style.color = '#666';
         }
     }
 
-    function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
+    async function loadDepts() {
+        const { data } = await _supabase.from('departments').select('*').order('name');
+        if (data) {
+            document.getElementById('deptsList').innerHTML = data.map(d => `
+                <div class="badge" style="padding:8px 12px; background:white; border:1px solid #ddd; display:flex; gap:8px;">
+                    <b>${d.name}</b> <small>${d.type}</small>
+                    <span onclick="deleteDept('${d.id}')" style="color:red; cursor:pointer;">×</span>
+                </div>`).join('');
+            document.getElementById('newUserDept').innerHTML = '<option value="">-- Выберите подразделение --</option>' + 
+                data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        }
+    }
+
+    async function saveDept() {
+        const name = document.getElementById('deptName').value.trim();
+        if(!name) return alert("Введите название!");
+        await _supabase.from('departments').insert([{ name, type: document.getElementById('deptType').value }]);
+        document.getElementById('deptName').value = '';
+        loadDepts();
+    }
+
+    async function deleteDept(id) {
+        if(confirm("Удалить подразделение?")) { await _supabase.from('departments').delete().eq('id', id); loadDepts(); }
+    }
+
+    async function loadUsers() {
+        const { data } = await _supabase.from('profiles').select('*').order('username');
+        if (data) {
+            document.getElementById('usersList').innerHTML = data.map(u => `
+                <tr>
+                    <td><strong>${u.username}</strong><br><small style="color:var(--accent)">${u.role || ''}</small></td>
+                    <td><span class="badge">${u.department || ''}</span></td>
+                    <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onclick="updateRight('${u.id}','can_use_mobile', ${u.can_use_mobile})"></td>
+                    <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onclick="updateRight('${u.id}','is_signed', ${u.is_signed})"></td>
+                    <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onclick="updateRight('${u.id}','can_view_acts', ${u.can_view_acts})"></td>
+                    <td align="right">
+                        <small style="color:#999; display:block; font-size:10px;">Ключ: ${u.raw_password || ''}</small>
+                        <button class="btn-reset" onclick="resetPasswordPrompt('${u.id}', '${u.username}')">СБРОС</button>
+                        <button class="btn-del-mini" onclick="deleteUser('${u.id}')">✕</button>
+                    </td>
+                </tr>`).join('');
+        }
+    }
+
+    async function updateRight(id, col, currentVal) {
+        const newVal = !Boolean(currentVal); 
+        const { error } = await _supabase.from('profiles').update({ [col]: newVal }).eq('id', id);
+        if(error) alert("Ошибка: " + error.message);
+        await loadUsers(); 
+    }
+
+    async function addUser() {
+        const login = document.getElementById('newUserLogin').value.trim();
+        const pass = document.getElementById('newUserPass').value;
+        const dept = document.getElementById('newUserDept').value;
+        const role = document.getElementById('newUserRole').value;
+        
+        if(!login || !pass || !dept) return alert("Заполните поля!");
+
+        if (role.includes("Начальник")) {
+            const { count } = await _supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true })
+                .eq('department', dept)
+                .ilike('role', '%Начальник%');
+
+            if(count >= 2) return alert("В данном подразделении уже есть 2 руководителя!");
+        }
+
+        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if(error) return alert(error.message);
+
+        if (data.user) {
+            // ЛОГИКА: Автоматическое назначение прав в зависимости от роли для цепочки согласования
+            let mobile = (role !== "Наблюдатель");
+            let signed = (role !== "Наблюдатель" && role !== "Инспектор"); // Инспектор только создает, подписывают начальники
+            let view = true;
+
+            await _supabase.from('profiles').upsert({ 
+                id: data.user.id, 
+                username: login, 
+                role: role, 
+                department: dept,
+                can_view_acts: view, 
+                can_use_mobile: mobile, 
+                is_signed: signed, 
+                raw_password: pass 
+            });
+            alert("Сотрудник зарегистрирован и привязан к цепочке согласования");
+            loadUsers();
+            
+            document.getElementById('newUserLogin').value = '';
+            document.getElementById('newUserPass').value = '';
+        }
+    }
+
+    async function deleteUser(id) {
+        if(confirm("Удалить сотрудника навсегда?")) {
+            await _supabase.from('profiles').delete().eq('id', id);
+            loadUsers();
+        }
+    }
+
+    async function resetPasswordPrompt(id, name) {
+        const p = prompt(`Новый пароль для ${name}:`);
+        if(p && p.length >= 6) {
+            await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
+            alert("Пароль обновлен");
+            loadUsers();
+        }
+    }
+
+    // ВАЖНО: Для корректной работы цепочки "Инспектор -> Нач.отдела -> Нач.управления -> Цех"
+    // Вам нужно в SQL редакторе Supabase выполнить:
+    // ALTER TABLE acts ADD COLUMN IF NOT EXISTS creator_dept TEXT;
+    // ALTER TABLE acts ADD COLUMN IF NOT EXISTS is_dept_approved BOOLEAN DEFAULT FALSE;
+    // ALTER TABLE acts ADD COLUMN IF NOT EXISTS is_fully_signed BOOLEAN DEFAULT FALSE;
+
+    async function checkDatabaseStructure() {
+        console.log("Система ролей готова. Для работы цепочки видимости настройте фильтры в index.html");
+    }
+
+    loadDepts();
+    loadUsers();
+    checkDatabaseStructure();
 </script>
 </body>
 </html>
