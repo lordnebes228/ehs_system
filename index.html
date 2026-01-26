@@ -36,14 +36,6 @@
         .col-law { width: 120px; }
         .col-action { width: 150px; }
         .col-time { width: 80px; text-align: center; }
-
-        @media print {
-            @page { size: A4; margin: 0; }
-            body { background: white !important; padding: 0 !important; margin: 0 !important; }
-            .container, .modal, .no-print { display: none !important; }
-            .modal { position: static; display: block; background: none; }
-            .prescription-blank { margin: 0 !important; box-shadow: none !important; width: 210mm !important; padding: 15mm !important; }
-        }
     </style>
 </head>
 <body>
@@ -95,8 +87,7 @@
 
 <div id="actModal" class="modal">
     <div class="prescription-blank" id="printableArea">
-        <div class="no-print" style="position:absolute; top:15px; right:15px; z-index:10; display: flex; gap: 10px;">
-            <button onclick="window.print()" style="background:var(--accent); color:white; border-radius:5px;">Печать</button>
+        <div style="position:absolute; top:15px; right:15px; z-index:10;">
             <button onclick="closeAct()" style="background:#ddd; border-radius:50%; width:35px; height:35px;">✕</button>
         </div>
         
@@ -139,7 +130,7 @@
             </div>
         </div>
 
-        <div id="pSignAction" class="no-print" style="text-align: center; margin-top: 30px;"></div>
+        <div id="pSignAction" style="text-align: center; margin-top: 30px;"></div>
         
         <div style="margin-top: 30px;">
             <div style="font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; font-size: 14px;">Фотофиксация:</div>
@@ -174,9 +165,8 @@
         
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
-        // --- ПРОВЕРКА ПРАВ ДОСТУПА НА САЙТ ---
         if (!profile || !profile.can_view_acts) {
-            alert("Доступ к веб-версии ограничен. Пожалуйста, используйте мобильное приложение.");
+            alert("Доступ к веб-версии ограничен.");
             await _supabase.auth.signOut();
             location.reload();
             return;
@@ -201,19 +191,18 @@
         const statusFilter = document.getElementById('statusFilter').value;
 
         const filtered = data.filter(a => {
-            // --- СТРОГАЯ ФИЛЬТРАЦИЯ ПО РОЛЯМ ---
             let isVisible = false;
             
             if (currentUser.role === 'Начальник отдела') {
-                // Видит только те акты, которые создал его отдел (инспекторы его отдела)
+                // Видит только свои акты
                 isVisible = (a.created_by_dept === currentUser.department);
             } 
             else if (currentUser.role === 'Начальник управления') {
-                // Видит всё
-                isVisible = true;
+                // ВИДИТ ТОЛЬКО ЕСЛИ СОГЛАСОВАНО ОТДЕЛОМ
+                isVisible = (a.is_dept_approved === true);
             } 
             else if (currentUser.role === 'Назначенное лицо' || currentUser.role === 'Начальник цеха') {
-                // Видит ТОЛЬКО подписанные акты своего подразделения
+                // Видит только полностью подписанные
                 isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
             } 
             else {
@@ -273,9 +262,10 @@
         btnBox.innerHTML = "";
 
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px;">СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
-        } else if (currentUser.role === 'Начальник управления' && act.is_dept_approved && !act.is_fully_signed) {
-            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px;">ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
+            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; width:100%;">СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
+        } 
+        else if (currentUser.role === 'Начальник управления' && act.is_dept_approved && !act.is_fully_signed) {
+            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; width:100%;">ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
         }
 
         const photos = JSON.parse(act.image_urls || "[]");
@@ -284,15 +274,17 @@
 
     async function approveDept(id) {
         if(confirm("Согласовать акт и отправить в управление?")) {
-            await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id);
-            closeAct(); loadActs();
+            const { error } = await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id);
+            if(error) alert(error.message);
+            else { closeAct(); loadActs(); }
         }
     }
 
     async function signFully(id) {
         if(confirm("Подписать акт? Он станет виден в цеху.")) {
-            await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id);
-            closeAct(); loadActs();
+            const { error } = await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id);
+            if(error) alert(error.message);
+            else { closeAct(); loadActs(); }
         }
     }
 
