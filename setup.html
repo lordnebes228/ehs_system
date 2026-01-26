@@ -15,7 +15,7 @@
         @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
         
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
-        select:disabled { background: #eee; cursor: not-allowed; opacity: 0.6; }
+        select:disabled { background: #f5f5f5; cursor: not-allowed; }
 
         .pass-wrapper { position: relative; width: 100%; }
         .toggle-pass { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; user-select: none; font-size: 18px; }
@@ -64,10 +64,10 @@
                 </div>
 
                 <select id="newUserRole" onchange="handleRoleChange()">
-                    <option value="Инспектор">Инспектор</option>
-                    <option value="Начальник управления">Начальник управления (Все отделы)</option>
-                    <option value="Начальник отдела">Начальник отдела</option>
-                    <option value="Начальник цеха">Начальник цеха</option>
+                    <option value="Инспектор">Инспектор (Только Моб.)</option>
+                    <option value="Начальник управления">Начальник управления (Сайт + Подпись)</option>
+                    <option value="Начальник отдела">Начальник отдела (Сайт + Подпись)</option>
+                    <option value="Начальник цеха">Начальник цеха (Только Сайт)</option>
                     <option value="Назначенное лицо">Назначенное лицо</option>
                     <option value="Наблюдатель">Наблюдатель (Только просмотр)</option>
                 </select>
@@ -75,7 +75,6 @@
                 <select id="newUserDept"><option value="">-- Выберите подразделение --</option></select>
                 
                 <button class="btn-user" onclick="addUser()">ЗАРЕГИСТРИРОВАТЬ</button>
-                <p id="roleNote" style="font-size: 11px; color: #666; margin-top: 10px;">* Лимит 2 чел. на отдел для ролей «Начальник»</p>
             </div>
 
             <div class="table-wrapper">
@@ -103,18 +102,14 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // УПРАВЛЕНИЕ ПОЛЯМИ ПРИ ВЫБОРЕ РОЛИ
     function handleRoleChange() {
         const role = document.getElementById('newUserRole').value;
         const deptSelect = document.getElementById('newUserDept');
-        
         if (role === "Начальник управления") {
             deptSelect.value = ""; 
             deptSelect.disabled = true;
-            deptSelect.style.opacity = "0.5";
         } else {
             deptSelect.disabled = false;
-            deptSelect.style.opacity = "1";
         }
     }
 
@@ -180,23 +175,20 @@
         let dept = document.getElementById('newUserDept').value;
         
         if(!login || !pass) return alert("Заполните логин и пароль!");
-        
-        // Логика для Начальника управления
-        if (role === "Начальник управления") {
-            dept = "ОБЩИЙ (Управление)";
-        } else if (!dept) {
-            return alert("Выберите подразделение!");
-        }
+        if (role === "Начальник управления") dept = "ОБЩИЙ (Управление)";
+        else if (!dept) return alert("Выберите подразделение!");
 
-        // Проверка лимита руководителей (2 чел)
-        if (role.includes("Начальник")) {
-            const { count } = await _supabase
-                .from('profiles')
-                .select('*', { count: 'exact', head: true })
-                .eq('department', dept)
-                .ilike('role', '%Начальник%');
+        // ПРАВА ДОСТУПА ПО УМОЛЧАНИЮ
+        let mobile = false, signed = false, view = false;
 
-            if(count >= 2) return alert(`В подразделении "${dept}" уже есть 2 руководителя!`);
+        if (role === "Инспектор") {
+            mobile = true;
+        } else if (role === "Начальник цеха") {
+            view = true;
+        } else if (role === "Начальник управления" || role === "Начальник отдела" || role === "Назначенное лицо") {
+            view = true; signed = true;
+        } else if (role === "Наблюдатель") {
+            view = true;
         }
 
         const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
@@ -208,12 +200,12 @@
                 username: login, 
                 role: role, 
                 department: dept,
-                can_view_acts: true, 
-                can_use_mobile: (role !== "Наблюдатель"), 
-                is_signed: (role !== "Наблюдатель"), 
+                can_view_acts: view, 
+                can_use_mobile: mobile, 
+                is_signed: signed, 
                 raw_password: pass 
             });
-            alert("Сотрудник зарегистрирован успешно!");
+            alert("Пользователь создан с правами: " + role);
             location.reload();
         }
     }
@@ -221,12 +213,7 @@
     async function deleteUser(id, name) {
         if(confirm(`Удалить сотрудника ${name} полностью?`)) {
             const { error } = await _supabase.from('profiles').delete().eq('id', id);
-            if (!error) {
-                alert("Пользователь удален.");
-                loadUsers();
-            } else {
-                alert("Ошибка: " + error.message);
-            }
+            if (!error) loadUsers();
         }
     }
 
@@ -234,7 +221,6 @@
         const p = prompt(`Новый пароль для ${name}:`);
         if(p && p.length >= 6) {
             await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
-            alert("Пароль обновлен.");
             loadUsers();
         }
     }
