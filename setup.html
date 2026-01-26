@@ -108,14 +108,11 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let allManagers = [];
-
     async function handleRoleChange() {
         const role = document.getElementById('newUserRole').value;
         const deptSelect = document.getElementById('newUserDept');
         const superBlock = document.getElementById('supervisorBlock');
 
-        // Управление видимостью полей
         deptSelect.disabled = (role === "Начальник управления");
         if (role === "Назначенное лицо") {
             superBlock.classList.remove('hidden');
@@ -168,7 +165,6 @@
     }
 
     async function loadUsers() {
-        // Мы тянем профили и пытаемся сопоставить их с именами начальников
         const { data } = await _supabase.from('profiles').select('*').order('username');
         if (data) {
             document.getElementById('usersList').innerHTML = data.map(u => {
@@ -184,7 +180,8 @@
                     <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onclick="updateRight('${u.id}','is_signed', ${u.is_signed})"></td>
                     <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onclick="updateRight('${u.id}','can_view_acts', ${u.can_view_acts})"></td>
                     <td align="right">
-                        <button class="btn-del-mini" onclick="deleteUser('${u.id}', '${u.username}')">✕</button>
+                        <button class="btn-reset" title="Сбросить пароль (Пересоздать)" onclick="recreateAccount('${u.id}', '${u.username}', '${u.role}', '${u.department}', '${u.supervisor_id}')">🔄</button>
+                        <button class="btn-del-mini" onclick="deleteUser('${u.id}', '${u.username}', '${u.role}')">✕</button>
                     </td>
                 </tr>`}).join('');
         }
@@ -220,7 +217,7 @@
                 username: login, 
                 role: role, 
                 department: dept,
-                supervisor_id: supervisorId || null, // Сохраняем ID начальника
+                supervisor_id: supervisorId || null,
                 can_view_acts: view, 
                 can_use_mobile: mobile, 
                 is_signed: signed, 
@@ -231,8 +228,65 @@
         }
     }
 
-    async function deleteUser(id, name) {
-        if(confirm(`Удалить ${name}?`)) {
+    // --- НОВАЯ ФУНКЦИЯ: ПЕРЕСОЗДАНИЕ АККАУНТА (СБРОС ПАРОЛЯ) ---
+    async function recreateAccount(oldId, username, role, dept, supervisorId) {
+        const newPass = prompt(`Введите новый пароль для ${username}:`);
+        if (!newPass || newPass.length < 6) return alert("Пароль слишком короткий или не введен");
+
+        if (confirm("Это действие пересоздаст учетную запись. Продолжить?")) {
+            // 1. Удаляем старый профиль (чтобы не было конфликта ID при signUp)
+            await _supabase.from('profiles').delete().eq('id', oldId);
+            
+            // 2. Регистрируем заново через signUp
+            const { data, error } = await _supabase.auth.signUp({ 
+                email: username + "@ssk.local", 
+                password: newPass 
+            });
+
+            if (error) return alert("Ошибка: " + error.message);
+
+            if (data.user) {
+                // 3. Создаем новый профиль с новым ID
+                await _supabase.from('profiles').insert({
+                    id: data.user.id,
+                    username: username,
+                    role: role,
+                    department: dept,
+                    supervisor_id: supervisorId || null,
+                    raw_password: newPass,
+                    can_use_mobile: (role === "Инспектор" || role === "Назначенное лицо"),
+                    can_view_acts: (role !== "Инспектор" && role !== "Назначенное лицо"),
+                    is_signed: (role === "Начальник управления" || role === "Начальник отдела")
+                });
+                alert("Пароль изменен, аккаунт обновлен.");
+                loadUsers();
+            }
+        }
+    }
+
+    // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ: УДАЛЕНИЕ С КАСКАДОМ ДЛЯ НАЧАЛЬНИКОВ ---
+    async function deleteUser(id, name, role) {
+        let msg = `Удалить ${name}?`;
+        if (role.includes("Начальник")) {
+            msg = `ВНИМАНИЕ: Вы удаляете руководителя (${name}). Все привязанные к нему "Назначенные лица" также будут удалены! Продолжить?`;
+        }
+
+        if(confirm(msg)) {
+            // Если это начальник, сначала удаляем его подчиненных
+            if (role.includes("Начальник")) {
+                const { data: subordinates } = await _supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('supervisor_id', id);
+                
+                if (subordinates && subordinates.length > 0) {
+                    const subIds = subordinates.map(s => s.id);
+                    await _supabase.from('profiles').delete().in('id', subIds);
+                    console.log(`Удалено подчиненных: ${subIds.length}`);
+                }
+            }
+
+            // Удаляем самого пользователя
             await _supabase.from('profiles').delete().eq('id', id);
             loadUsers();
         }
