@@ -22,13 +22,11 @@
         .auth-card { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; margin: 80px auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .act-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; }
         
-        /* Статусы */
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; color: white; font-weight: bold; }
         .bg-wait { background: var(--warning); }
         .bg-sign { background: var(--accent); }
         .bg-done { background: var(--success); }
 
-        /* МОДАЛЬНОЕ ОКНО */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
         .prescription-blank { background: white; margin: 20px auto; padding: 20mm 15mm; width: 210mm; min-height: 297mm; color: #000; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: "Times New Roman", serif; line-height: 1.3; box-sizing: border-box; }
         .p-table { width: 100%; border-collapse: collapse; margin: 15px 0; table-layout: fixed; }
@@ -175,13 +173,23 @@
         if (!session) { document.getElementById('loginForm').style.display='block'; return; }
         
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        currentUser = profile;
         
+        // --- ПРОВЕРКА ПРАВ ДОСТУПА НА САЙТ ---
+        if (!profile || !profile.can_view_acts) {
+            alert("Доступ к веб-версии ограничен. Пожалуйста, используйте мобильное приложение.");
+            await _supabase.auth.signOut();
+            location.reload();
+            return;
+        }
+
+        currentUser = profile;
         document.getElementById('loginForm').style.display='none';
         document.getElementById('mainContent').style.display='block';
         document.getElementById('welcomeText').innerText = profile.username;
         document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
+        
         if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
+        
         loadActs();
     }
 
@@ -193,12 +201,25 @@
         const statusFilter = document.getElementById('statusFilter').value;
 
         const filtered = data.filter(a => {
-            // Фильтрация видимости по ролям
+            // --- СТРОГАЯ ФИЛЬТРАЦИЯ ПО РОЛЯМ ---
             let isVisible = false;
-            if (currentUser.role === 'Начальник отдела') isVisible = (a.created_by_dept === currentUser.department);
-            else if (currentUser.role === 'Начальник управления') isVisible = true;
-            else if (currentUser.role === 'Начальник цеха') isVisible = (a.target_shop === currentUser.department && a.is_fully_signed);
-            else isVisible = true; // Инспекторы видят всё
+            
+            if (currentUser.role === 'Начальник отдела') {
+                // Видит только те акты, которые создал его отдел (инспекторы его отдела)
+                isVisible = (a.created_by_dept === currentUser.department);
+            } 
+            else if (currentUser.role === 'Начальник управления') {
+                // Видит всё
+                isVisible = true;
+            } 
+            else if (currentUser.role === 'Назначенное лицо' || currentUser.role === 'Начальник цеха') {
+                // Видит ТОЛЬКО подписанные акты своего подразделения
+                isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
+            } 
+            else {
+                // Инспекторы видят всё для контроля
+                isVisible = true; 
+            }
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
             const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? a.is_fully_signed : !a.is_fully_signed);
@@ -245,11 +266,9 @@
             </tr>
         `;
 
-        // Статусы подписей в бланке
         document.getElementById('uSignStatus').innerText = act.is_fully_signed ? "ПОДПИСАНО ЭЦП" : "(подпись)";
         document.getElementById('deptSignStatus').innerText = act.is_dept_approved ? "СОГЛАСОВАНО" : "(Ф.И.О.)";
 
-        // Кнопки действий
         const btnBox = document.getElementById('pSignAction');
         btnBox.innerHTML = "";
 
@@ -271,7 +290,7 @@
     }
 
     async function signFully(id) {
-        if(confirm("Подписать акт? Он станет виден начальнику цеха.")) {
+        if(confirm("Подписать акт? Он станет виден в цеху.")) {
             await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id);
             closeAct(); loadActs();
         }
