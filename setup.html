@@ -13,9 +13,13 @@
         h2 { border-bottom: 3px solid #eee; padding-bottom: 10px; color: var(--primary); margin-top: 0; display: flex; align-items: center; gap: 10px; font-size: 22px; }
         .grid { display: grid; grid-template-columns: 380px 1fr; gap: 30px; }
         @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
+        select:disabled { background: #eee; cursor: not-allowed; opacity: 0.6; }
+
         .pass-wrapper { position: relative; width: 100%; }
         .toggle-pass { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; user-select: none; font-size: 18px; }
+
         button { width: 100%; padding: 15px; border-radius: 8px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; }
         .btn-dept { background: var(--accent); }
         .btn-user { background: var(--user-color); }
@@ -36,7 +40,7 @@
         <h2>🛠 Конструктор подразделений</h2>
         <div class="grid">
             <div style="background: #f9f9f9; padding: 15px; border-radius: 12px;">
-                <input type="text" id="deptName" placeholder="Название">
+                <input type="text" id="deptName" placeholder="Название (например: Цех №1)">
                 <select id="deptType">
                     <option value="Цех">Производственный цех</option>
                     <option value="Отдел">Управленческий отдел</option>
@@ -53,20 +57,25 @@
             <div style="background: #f0f7ff; padding: 15px; border-radius: 12px; border: 1px solid #d0e3f0;">
                 <h3>Новый сотрудник</h3>
                 <input type="text" id="newUserLogin" placeholder="Логин">
+                
                 <div class="pass-wrapper">
                     <input type="password" id="newUserPass" placeholder="Пароль">
                     <span class="toggle-pass" onclick="togglePasswordVisibility()">👁</span>
                 </div>
-                <select id="newUserDept"><option value="">-- Выберите подразделение --</option></select>
-                <select id="newUserRole">
+
+                <select id="newUserRole" onchange="handleRoleChange()">
                     <option value="Инспектор">Инспектор</option>
-                    <option value="Начальник управления">Начальник управления</option>
+                    <option value="Начальник управления">Начальник управления (Все отделы)</option>
                     <option value="Начальник отдела">Начальник отдела</option>
                     <option value="Начальник цеха">Начальник цеха</option>
                     <option value="Назначенное лицо">Назначенное лицо</option>
                     <option value="Наблюдатель">Наблюдатель (Только просмотр)</option>
                 </select>
+
+                <select id="newUserDept"><option value="">-- Выберите подразделение --</option></select>
+                
                 <button class="btn-user" onclick="addUser()">ЗАРЕГИСТРИРОВАТЬ</button>
+                <p id="roleNote" style="font-size: 11px; color: #666; margin-top: 10px;">* Лимит 2 чел. на отдел для ролей «Начальник»</p>
             </div>
 
             <div class="table-wrapper">
@@ -93,6 +102,21 @@
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // УПРАВЛЕНИЕ ПОЛЯМИ ПРИ ВЫБОРЕ РОЛИ
+    function handleRoleChange() {
+        const role = document.getElementById('newUserRole').value;
+        const deptSelect = document.getElementById('newUserDept');
+        
+        if (role === "Начальник управления") {
+            deptSelect.value = ""; 
+            deptSelect.disabled = true;
+            deptSelect.style.opacity = "0.5";
+        } else {
+            deptSelect.disabled = false;
+            deptSelect.style.opacity = "1";
+        }
+    }
 
     function togglePasswordVisibility() {
         const passInput = document.getElementById('newUserPass');
@@ -131,7 +155,7 @@
             document.getElementById('usersList').innerHTML = data.map(u => `
                 <tr>
                     <td><strong>${u.username}</strong><br><small style="color:var(--accent)">${u.role || ''}</small></td>
-                    <td><span class="badge">${u.department || ''}</span></td>
+                    <td><span class="badge" style="${u.department === 'ОБЩИЙ (Управление)' ? 'background:#d1ecf1;color:#0c5460' : ''}">${u.department || ''}</span></td>
                     <td align="center"><input type="checkbox" ${u.can_use_mobile ? 'checked' : ''} onclick="updateRight('${u.id}','can_use_mobile', ${u.can_use_mobile})"></td>
                     <td align="center"><input type="checkbox" ${u.is_signed ? 'checked' : ''} onclick="updateRight('${u.id}','is_signed', ${u.is_signed})"></td>
                     <td align="center"><input type="checkbox" ${u.can_view_acts ? 'checked' : ''} onclick="updateRight('${u.id}','can_view_acts', ${u.can_view_acts})"></td>
@@ -152,13 +176,30 @@
     async function addUser() {
         const login = document.getElementById('newUserLogin').value.trim();
         const pass = document.getElementById('newUserPass').value;
-        const dept = document.getElementById('newUserDept').value;
         const role = document.getElementById('newUserRole').value;
+        let dept = document.getElementById('newUserDept').value;
         
-        if(!login || !pass || !dept) return alert("Заполните поля!");
+        if(!login || !pass) return alert("Заполните логин и пароль!");
+        
+        // Логика для Начальника управления
+        if (role === "Начальник управления") {
+            dept = "ОБЩИЙ (Управление)";
+        } else if (!dept) {
+            return alert("Выберите подразделение!");
+        }
+
+        // Проверка лимита руководителей (2 чел)
+        if (role.includes("Начальник")) {
+            const { count } = await _supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true })
+                .eq('department', dept)
+                .ilike('role', '%Начальник%');
+
+            if(count >= 2) return alert(`В подразделении "${dept}" уже есть 2 руководителя!`);
+        }
 
         const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
-        
         if(error) return alert("Ошибка: " + error.message);
 
         if (data.user) {
@@ -172,19 +213,19 @@
                 is_signed: (role !== "Наблюдатель"), 
                 raw_password: pass 
             });
-            alert("Сотрудник зарегистрирован");
-            location.reload(); // Перезагружаем для чистоты данных
+            alert("Сотрудник зарегистрирован успешно!");
+            location.reload();
         }
     }
 
     async function deleteUser(id, name) {
         if(confirm(`Удалить сотрудника ${name} полностью?`)) {
             const { error } = await _supabase.from('profiles').delete().eq('id', id);
-            if (error) {
-                alert("Ошибка удаления: " + error.message + "\nПроверьте, применили ли вы SQL код в Supabase.");
-            } else {
-                alert("Пользователь удален. Теперь логин свободен.");
+            if (!error) {
+                alert("Пользователь удален.");
                 loadUsers();
+            } else {
+                alert("Ошибка: " + error.message);
             }
         }
     }
@@ -193,7 +234,7 @@
         const p = prompt(`Новый пароль для ${name}:`);
         if(p && p.length >= 6) {
             await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
-            alert("Пароль обновлен в таблице.");
+            alert("Пароль обновлен.");
             loadUsers();
         }
     }
