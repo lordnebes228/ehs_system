@@ -190,21 +190,18 @@
             if(count >= 2) return alert("В данном подразделении уже есть 2 руководителя!");
         }
 
-        // Попытка регистрации
-        const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
+        const { data, error } = await _supabase.auth.signUp({ 
+            email: login + "@ssk.local", 
+            password: pass 
+        });
         
         if(error) {
-            return alert("Ошибка регистрации: " + error.message + "\n\nЕсли пользователь был удален ранее, его нужно удалить вручную в панели Supabase -> Authentication -> Users.");
+            return alert("Ошибка: " + error.message + "\n\nЕсли вы только что удалили этого пользователя, подождите 5 секунд или убедитесь, что SQL-триггер настроен.");
         }
 
         if (data.user) {
-            let mobile = true;
-            let signed = true;
-            let view = true;
-
-            if (role === "Наблюдатель") {
-                mobile = false; signed = false; view = true;
-            }
+            let mobile = true; let signed = true; let view = true;
+            if (role === "Наблюдатель") { mobile = false; signed = false; }
 
             await _supabase.from('profiles').upsert({ 
                 id: data.user.id, 
@@ -225,12 +222,14 @@
     }
 
     async function deleteUser(id, name) {
-        if(confirm(`Удалить сотрудника ${name}?\n\nВНИМАНИЕ: Запись будет удалена из базы, но для полной очистки вы должны удалить email ${name}@ssk.local в панели Supabase (меню Authentication -> Users), иначе вы не сможете создать пользователя с таким же именем снова.`)) {
-            // Удаляем профиль
+        if(confirm(`Удалить сотрудника ${name} ПОЛНОСТЬЮ?\n\nЭто действие удалит профиль и аккаунт для входа.`)) {
+            // Мы удаляем только из profiles, а SQL-триггер сам подчистит auth.users
             const { error } = await _supabase.from('profiles').delete().eq('id', id);
-            if (error) alert("Ошибка при удалении профиля: " + error.message);
-            else {
-                alert("Профиль удален из базы. Теперь удалите его в консоли Supabase для возможности повторной регистрации.");
+            
+            if (error) {
+                alert("Ошибка при удалении: " + error.message);
+            } else {
+                alert("Пользователь полностью удален.");
                 loadUsers();
             }
         }
@@ -240,7 +239,7 @@
         const p = prompt(`Новый пароль для ${name}:`);
         if(p && p.length >= 6) {
             await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
-            alert("Пароль обновлен в таблице профиля. Примечание: для смены пароля входа используйте Auth Management.");
+            alert("Пароль обновлен в базе.");
             loadUsers();
         }
     }
