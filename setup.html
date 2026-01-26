@@ -65,10 +65,10 @@
 
                 <select id="newUserRole" onchange="handleRoleChange()">
                     <option value="Инспектор">Инспектор (Только Моб.)</option>
+                    <option value="Назначенное лицо">Назначенное лицо (Только Моб.)</option>
                     <option value="Начальник управления">Начальник управления (Сайт + Подпись)</option>
                     <option value="Начальник отдела">Начальник отдела (Сайт + Подпись)</option>
                     <option value="Начальник цеха">Начальник цеха (Только Сайт)</option>
-                    <option value="Назначенное лицо">Назначенное лицо</option>
                     <option value="Наблюдатель">Наблюдатель (Только просмотр)</option>
                 </select>
 
@@ -181,11 +181,12 @@
         // ПРАВА ДОСТУПА ПО УМОЛЧАНИЮ
         let mobile = false, signed = false, view = false;
 
-        if (role === "Инспектор") {
+        // Назначенное лицо приравнено к Инспектору
+        if (role === "Инспектор" || role === "Назначенное лицо") {
             mobile = true;
         } else if (role === "Начальник цеха") {
             view = true;
-        } else if (role === "Начальник управления" || role === "Начальник отдела" || role === "Назначенное лицо") {
+        } else if (role === "Начальник управления" || role === "Начальник отдела") {
             view = true; signed = true;
         } else if (role === "Наблюдатель") {
             view = true;
@@ -205,7 +206,7 @@
                 is_signed: signed, 
                 raw_password: pass 
             });
-            alert("Пользователь создан с правами: " + role);
+            alert("Пользователь " + login + " создан как " + role);
             location.reload();
         }
     }
