@@ -16,7 +16,6 @@
         
         input, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
         
-        /* Стили для поля пароля с глазиком */
         .pass-wrapper { position: relative; width: 100%; }
         .toggle-pass { 
             position: absolute; 
@@ -110,7 +109,6 @@
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // Функция переключения видимости пароля
     function togglePasswordVisibility() {
         const passInput = document.getElementById('newUserPass');
         const icon = document.querySelector('.toggle-pass');
@@ -161,7 +159,7 @@
                     <td align="right">
                         <small style="color:#999; display:block; font-size:10px;">Ключ: ${u.raw_password || ''}</small>
                         <button class="btn-reset" onclick="resetPasswordPrompt('${u.id}', '${u.username}')">СБРОС</button>
-                        <button class="btn-del-mini" onclick="deleteUser('${u.id}')">✕</button>
+                        <button class="btn-del-mini" onclick="deleteUser('${u.id}', '${u.username}')">✕</button>
                     </td>
                 </tr>`).join('');
         }
@@ -192,8 +190,12 @@
             if(count >= 2) return alert("В данном подразделении уже есть 2 руководителя!");
         }
 
+        // Попытка регистрации
         const { data, error } = await _supabase.auth.signUp({ email: login + "@ssk.local", password: pass });
-        if(error) return alert(error.message);
+        
+        if(error) {
+            return alert("Ошибка регистрации: " + error.message + "\n\nЕсли пользователь был удален ранее, его нужно удалить вручную в панели Supabase -> Authentication -> Users.");
+        }
 
         if (data.user) {
             let mobile = true;
@@ -201,9 +203,7 @@
             let view = true;
 
             if (role === "Наблюдатель") {
-                mobile = false;
-                signed = false;
-                view = true;
+                mobile = false; signed = false; view = true;
             }
 
             await _supabase.from('profiles').upsert({ 
@@ -216,18 +216,23 @@
                 is_signed: signed, 
                 raw_password: pass 
             });
-            alert("Сотрудник зарегистрирован");
-            loadUsers();
             
+            alert("Сотрудник зарегистрирован");
             document.getElementById('newUserLogin').value = '';
             document.getElementById('newUserPass').value = '';
+            loadUsers();
         }
     }
 
-    async function deleteUser(id) {
-        if(confirm("Удалить сотрудника навсегда?")) {
-            await _supabase.from('profiles').delete().eq('id', id);
-            loadUsers();
+    async function deleteUser(id, name) {
+        if(confirm(`Удалить сотрудника ${name}?\n\nВНИМАНИЕ: Запись будет удалена из базы, но для полной очистки вы должны удалить email ${name}@ssk.local в панели Supabase (меню Authentication -> Users), иначе вы не сможете создать пользователя с таким же именем снова.`)) {
+            // Удаляем профиль
+            const { error } = await _supabase.from('profiles').delete().eq('id', id);
+            if (error) alert("Ошибка при удалении профиля: " + error.message);
+            else {
+                alert("Профиль удален из базы. Теперь удалите его в консоли Supabase для возможности повторной регистрации.");
+                loadUsers();
+            }
         }
     }
 
@@ -235,7 +240,7 @@
         const p = prompt(`Новый пароль для ${name}:`);
         if(p && p.length >= 6) {
             await _supabase.from('profiles').update({ raw_password: p }).eq('id', id);
-            alert("Пароль обновлен");
+            alert("Пароль обновлен в таблице профиля. Примечание: для смены пароля входа используйте Auth Management.");
             loadUsers();
         }
     }
