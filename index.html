@@ -36,6 +36,22 @@
         .col-law { width: 120px; }
         .col-action { width: 150px; }
         .col-time { width: 80px; text-align: center; }
+
+        /* Стиль штампа подписи */
+        .stamp { 
+            border: 3px solid; 
+            padding: 5px 10px; 
+            display: inline-block; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            transform: rotate(-3deg); 
+            border-radius: 5px;
+            font-size: 12px;
+            line-height: 1;
+            text-align: center;
+        }
+        .stamp-blue { color: #3498db; border-color: #3498db; }
+        .stamp-green { color: #27ae60; border-color: #27ae60; }
     </style>
 </head>
 <body>
@@ -122,11 +138,11 @@
         <div style="margin-top: 35px; font-size: 14px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
                 <div style="width: 50%;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b><br>(А.Б. Носов)</div>
-                <div id="uSignStatus" style="width: 40%; border-bottom: 1px solid black; text-align: center; align-self: flex-end;">(подпись)</div>
+                <div id="uSignStatus" style="width: 40%; text-align: center; align-self: flex-end;">(подпись)</div>
             </div>
             <div style="display: flex; justify-content: space-between;">
-                <div style="width: 40%;"><b>Предписание получил:</b></div>
-                <div id="deptSignStatus" style="width: 50%; border-bottom: 1px solid black; text-align: center;">(Ф.И.О., должность руководителя)</div>
+                <div style="width: 40%;"><b>Согласовано (Нач. отдела):</b></div>
+                <div id="deptSignStatus" style="width: 50%; text-align: center;">(Ф.И.О.)</div>
             </div>
         </div>
 
@@ -193,21 +209,16 @@
         const filtered = data.filter(a => {
             let isVisible = false;
             
-            // 1. ЛОГИКА ВИДИМОСТИ ПО РОЛЯМ
             if (currentUser.role === 'Начальник отдела') {
-                // Видит акты своего отдела, которые ЕЩЕ НЕ подписаны управлением
                 isVisible = (a.created_by_dept === currentUser.department && !a.is_fully_signed);
             } 
             else if (currentUser.role === 'Начальник управления') {
-                // Видит акты ТОЛЬКО если их уже согласовал начальник отдела
                 isVisible = (a.is_dept_approved === true && !a.is_fully_signed);
             } 
             else if (currentUser.role === 'Назначенное лицо' || currentUser.role === 'Начальник цеха') {
-                // Цех видит акт ТОЛЬКО после финальной подписи управления
                 isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
             } 
             else {
-                // Инспекторы и Админы видят всё
                 isVisible = true; 
             }
 
@@ -245,7 +256,6 @@
         document.getElementById('pDateText').innerText = d;
         document.getElementById('pDeptText').innerText = act.target_shop || "—";
 
-        // Парсим описание
         const lawMatch = (act.violation_desc || "").match(/Статья:\s*(.*)\n/);
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
 
@@ -259,25 +269,27 @@
             </tr>
         `;
 
-        // Визуализация подписей в бланке
-        document.getElementById('uSignStatus').innerHTML = act.is_fully_signed ? "<b style='color:green'>ЭЛЕКТРОННАЯ ПОДПИСЬ: НОСОВ А.Б.</b>" : "(подпись)";
-        document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved ? "<b style='color:blue'>СОГЛАСОВАНО ОТДЕЛОМ</b>" : "(Ф.И.О.)";
+        // Визуализация штампов подписей
+        document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved 
+            ? `<div class="stamp stamp-blue">СОГЛАСОВАНО<br>${act.signer_name_dept || 'НАЧ. ОТДЕЛА'}</div>` 
+            : `<span style="color:#ccc">(ожидает согласования)</span>`;
 
-        // 2. ЛОГИКА КНОПОК ПОДПИСИ
+        document.getElementById('uSignStatus').innerHTML = act.is_fully_signed 
+            ? `<div class="stamp stamp-green">ПОДПИСАНО ЭЦП<br>НОСОВ А.Б.</div>` 
+            : `<span style="color:#ccc">(на подписи)</span>`;
+
         const btnBox = document.getElementById('pSignAction');
         btnBox.innerHTML = "";
 
-        // Если я начальник отдела, акт еще не согласован мной, и это мой отдел
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
             btnBox.innerHTML = `
-                <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (КАК НАЧ. ОТДЕЛА)</button>
+                <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>
                 <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">ОТКЛОНИТЬ</button>
             `;
         } 
-        // Если я начальник управления и отдел уже согласовал
         else if (currentUser.role === 'Начальник управления' && act.is_dept_approved && !act.is_fully_signed) {
             btnBox.innerHTML = `
-                <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ И ОТПРАВИТЬ В ЦЕХ</button>
+                <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>
                 <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">ОТКЛОНИТЬ</button>
             `;
         }
@@ -287,23 +299,29 @@
     }
 
     async function approveDept(id) {
-        if(confirm("Вы подтверждаете нарушение? Акт будет передан на подпись начальнику управления.")) {
-            const { error } = await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id);
-            if(error) alert("Ошибка: " + error.message);
+        if(confirm("Согласовать акт и отправить в управление?")) {
+            const { error } = await _supabase.from('acts').update({ 
+                is_dept_approved: true,
+                signer_name_dept: currentUser.username 
+            }).eq('id', id);
+            if(error) alert(error.message);
             else { closeAct(); loadActs(); }
         }
     }
 
     async function signFully(id) {
-        if(confirm("После подписи акт станет официально виден начальнику цеха и исполнителю. Продолжить?")) {
-            const { error } = await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id);
-            if(error) alert("Ошибка: " + error.message);
+        if(confirm("Подписать акт? Он станет виден в цеху.")) {
+            const { error } = await _supabase.from('acts').update({ 
+                is_fully_signed: true,
+                signer_name_admin: 'Носов А.Б.'
+            }).eq('id', id);
+            if(error) alert(error.message);
             else { closeAct(); loadActs(); }
         }
     }
 
     async function rejectAct(id) {
-        if(confirm("Удалить или аннулировать этот акт?")) {
+        if(confirm("Удалить этот акт?")) {
             const { error } = await _supabase.from('acts').delete().eq('id', id);
             if(error) alert(error.message);
             else { closeAct(); loadActs(); }
