@@ -63,8 +63,8 @@
             <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по цеху или нарушению..." oninput="loadActs()">
             <select id="statusFilter" onchange="loadActs()">
                 <option value="all">Все акты</option>
-                <option value="pending">⏳ Ожидают подписи</option>
-                <option value="signed">✅ Полностью подписаны</option>
+                <option value="pending">⏳ В процессе согласования</option>
+                <option value="signed">✅ В работе (подписаны)</option>
             </select>
         </div>
 
@@ -103,7 +103,7 @@
         </div>
 
         <p style="font-size: 14px; text-indent: 30px; text-align: justify; margin: 10px 0;">
-            В ходе осуществления ежедневного контроля <b id="pDateText"></b>г. выявлены нарушения требований подразделении <b id="pDeptText"></b>:
+            В ходе осуществления ежедневного контроля <b id="pDateText"></b>г. выявлены нарушения требований в подразделении <b id="pDeptText"></b>:
         </p>
 
         <table class="p-table">
@@ -130,7 +130,7 @@
             </div>
         </div>
 
-        <div id="pSignAction" style="text-align: center; margin-top: 30px;"></div>
+        <div id="pSignAction" style="text-align: center; margin-top: 30px; display: flex; gap: 10px;"></div>
         
         <div style="margin-top: 30px;">
             <div style="font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; font-size: 14px;">Фотофиксация:</div>
@@ -193,20 +193,21 @@
         const filtered = data.filter(a => {
             let isVisible = false;
             
+            // 1. ЛОГИКА ВИДИМОСТИ ПО РОЛЯМ
             if (currentUser.role === 'Начальник отдела') {
-                // Видит только свои акты
-                isVisible = (a.created_by_dept === currentUser.department);
+                // Видит акты своего отдела, которые ЕЩЕ НЕ подписаны управлением
+                isVisible = (a.created_by_dept === currentUser.department && !a.is_fully_signed);
             } 
             else if (currentUser.role === 'Начальник управления') {
-                // ВИДИТ ТОЛЬКО ЕСЛИ СОГЛАСОВАНО ОТДЕЛОМ
-                isVisible = (a.is_dept_approved === true);
+                // Видит акты ТОЛЬКО если их уже согласовал начальник отдела
+                isVisible = (a.is_dept_approved === true && !a.is_fully_signed);
             } 
             else if (currentUser.role === 'Назначенное лицо' || currentUser.role === 'Начальник цеха') {
-                // Видит только полностью подписанные
+                // Цех видит акт ТОЛЬКО после финальной подписи управления
                 isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
             } 
             else {
-                // Инспекторы видят всё для контроля
+                // Инспекторы и Админы видят всё
                 isVisible = true; 
             }
 
@@ -222,11 +223,13 @@
             else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">ОЖИДАЕТ УПРАВЛЕНИЕ</span>';
             else statusBadge = '<span class="badge bg-wait">ОЖИДАЕТ ОТДЕЛ</span>';
 
+            const photoUrl = JSON.parse(a.image_urls || '[]')[0] || '';
+
             return `
             <tr onclick='openAct(${JSON.stringify(a)})'>
                 <td>${new Date(a.created_at).toLocaleDateString()}</td>
                 <td><b>${a.target_shop || '—'}</b></td>
-                <td><img src="${JSON.parse(a.image_urls || '[]')[0] || ''}" class="act-thumb"></td>
+                <td><img src="${photoUrl}" class="act-thumb" onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'"></td>
                 <td style="font-size:12px;">${(a.violation_desc || "").substring(0,60)}...</td>
                 <td align="center">${statusBadge}</td>
             </tr>
@@ -242,6 +245,7 @@
         document.getElementById('pDateText').innerText = d;
         document.getElementById('pDeptText').innerText = act.target_shop || "—";
 
+        // Парсим описание
         const lawMatch = (act.violation_desc || "").match(/Статья:\s*(.*)\n/);
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
 
@@ -255,34 +259,52 @@
             </tr>
         `;
 
-        document.getElementById('uSignStatus').innerText = act.is_fully_signed ? "ПОДПИСАНО ЭЦП" : "(подпись)";
-        document.getElementById('deptSignStatus').innerText = act.is_dept_approved ? "СОГЛАСОВАНО" : "(Ф.И.О.)";
+        // Визуализация подписей в бланке
+        document.getElementById('uSignStatus').innerHTML = act.is_fully_signed ? "<b style='color:green'>ЭЛЕКТРОННАЯ ПОДПИСЬ: НОСОВ А.Б.</b>" : "(подпись)";
+        document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved ? "<b style='color:blue'>СОГЛАСОВАНО ОТДЕЛОМ</b>" : "(Ф.И.О.)";
 
+        // 2. ЛОГИКА КНОПОК ПОДПИСИ
         const btnBox = document.getElementById('pSignAction');
         btnBox.innerHTML = "";
 
+        // Если я начальник отдела, акт еще не согласован мной, и это мой отдел
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; width:100%;">СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
+            btnBox.innerHTML = `
+                <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (КАК НАЧ. ОТДЕЛА)</button>
+                <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">ОТКЛОНИТЬ</button>
+            `;
         } 
+        // Если я начальник управления и отдел уже согласовал
         else if (currentUser.role === 'Начальник управления' && act.is_dept_approved && !act.is_fully_signed) {
-            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; width:100%;">ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
+            btnBox.innerHTML = `
+                <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ И ОТПРАВИТЬ В ЦЕХ</button>
+                <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">ОТКЛОНИТЬ</button>
+            `;
         }
 
         const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc;">`).join('');
+        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-bottom:5px;">`).join('');
     }
 
     async function approveDept(id) {
-        if(confirm("Согласовать акт и отправить в управление?")) {
+        if(confirm("Вы подтверждаете нарушение? Акт будет передан на подпись начальнику управления.")) {
             const { error } = await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id);
-            if(error) alert(error.message);
+            if(error) alert("Ошибка: " + error.message);
             else { closeAct(); loadActs(); }
         }
     }
 
     async function signFully(id) {
-        if(confirm("Подписать акт? Он станет виден в цеху.")) {
+        if(confirm("После подписи акт станет официально виден начальнику цеха и исполнителю. Продолжить?")) {
             const { error } = await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id);
+            if(error) alert("Ошибка: " + error.message);
+            else { closeAct(); loadActs(); }
+        }
+    }
+
+    async function rejectAct(id) {
+        if(confirm("Удалить или аннулировать этот акт?")) {
+            const { error } = await _supabase.from('acts').delete().eq('id', id);
             if(error) alert(error.message);
             else { closeAct(); loadActs(); }
         }
