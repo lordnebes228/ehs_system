@@ -6,7 +6,7 @@
     <title>EHS Мониторинг - Журнал</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --danger: #e74c3c; --success: #27ae60; --admin: #8e44ad; --warning: #f39c12; }
+        :root { --primary: #1a252f; --accent: #3498db; --bg: #f4f7f6; --danger: #e74c3c; --success: #27ae60; --admin: #8e44ad; --warning: #f39c12; --remediated: #9b59b6; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; font-size: 15px; }
         
         .container { max-width: 1400px; margin: 0 auto; display: none; }
@@ -26,6 +26,7 @@
         .bg-wait { background: var(--warning); }
         .bg-sign { background: var(--accent); }
         .bg-done { background: var(--success); }
+        .bg-remediated { background: var(--remediated); }
 
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); overflow-y: auto; }
         .prescription-blank { background: white; margin: 20px auto; padding: 20mm 15mm; width: 210mm; min-height: 297mm; color: #000; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.5); font-family: "Times New Roman", serif; line-height: 1.3; box-sizing: border-box; }
@@ -52,7 +53,6 @@
         .stamp-blue { color: #3498db; border-color: #3498db; }
         .stamp-green { color: #27ae60; border-color: #27ae60; }
 
-        /* Стиль для выбора исполнителя */
         #assignSection { 
             margin-top: 15px; 
             padding: 10px; 
@@ -61,14 +61,22 @@
             border-radius: 8px; 
             display: none;
         }
+
+        .remediation-report-box {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f0f7ff;
+            border-left: 4px solid var(--remediated);
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
 
 <div id="loginForm" class="auth-card" style="display: none;">
     <h1 style="color: var(--primary);">EHS Мониторинг</h1>
-    <input type="text" id="userLogin" placeholder="Логин">
-    <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px;">
+    <input type="text" id="userLogin" placeholder="Логин" style="width: 100%; box-sizing: border-box;">
+    <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px; width: 100%; box-sizing: border-box;">
     <button onclick="signIn()" style="width: 100%; margin-top: 25px; background: var(--accent); color:white; height: 50px;">ВОЙТИ</button>
 </div>
 
@@ -88,6 +96,7 @@
             <input type="text" id="actSearch" class="search-box" placeholder="🔍 Поиск по цеху или нарушению..." oninput="loadActs()">
             <select id="statusFilter" onchange="loadActs()">
                 <option value="all">Все акты</option>
+                <option value="remediated">🟣 Отчеты об устранении</option>
                 <option value="pending">⏳ В процессе согласования</option>
                 <option value="signed">✅ В работе (подписаны)</option>
             </select>
@@ -144,6 +153,8 @@
             <tbody id="pTableBody"></tbody>
         </table>
 
+        <div id="remediationReportSection"></div>
+
         <div style="margin-top: 35px; font-size: 14px;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
                 <div style="width: 50%;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b><br>(А.Б. Носов)</div>
@@ -180,7 +191,7 @@
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
     let currentUser = null;
-    let allUsers = []; // Для списка назначенных лиц
+    let allUsers = []; 
 
     document.addEventListener('DOMContentLoaded', checkSession);
 
@@ -216,7 +227,6 @@
         
         if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
         
-        // Предзагрузка пользователей для выбора
         const { data: users } = await _supabase.from('profiles').select('id, username').eq('role', 'Назначенное лицо');
         allUsers = users || [];
 
@@ -233,15 +243,13 @@
         const filtered = data.filter(a => {
             let isVisible = false;
             
-            // Начальник отдела/цеха видит акты своего подразделения всегда
             if (currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') {
                 isVisible = (a.created_by_dept === currentUser.department || a.target_shop === currentUser.department);
             } 
-            // Начальник управления видит согласованные акты
             else if (currentUser.role === 'Начальник управления') {
-                isVisible = (a.is_dept_approved === true);
+                // Видит те что на согласовании ИЛИ те, по которым пришел отчет
+                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
             } 
-            // Назначенное лицо видит только акты, где его UUID в поле assigned_to
             else if (currentUser.role === 'Назначенное лицо') {
                 isVisible = (a.assigned_to === currentUser.id);
             } 
@@ -250,16 +258,21 @@
             }
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-            const matchesStatus = statusFilter === 'all' ? true : (statusFilter === 'signed' ? a.is_fully_signed : !a.is_fully_signed);
+            
+            let matchesStatus = true;
+            if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
+            else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
+            else if(statusFilter === 'remediated') matchesStatus = a.is_remediated;
 
             return isVisible && matchesSearch && matchesStatus;
         });
 
         document.getElementById('actsTable').innerHTML = filtered.map(a => {
             let statusBadge = '';
-            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">В РАБОТЕ (ПОДПИСАН)</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">ОЖИДАЕТ УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge bg-wait">ОЖИДАЕТ ОТДЕЛ</span>';
+            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО (В РАБОТЕ)</span>';
+            else if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ ПОЛУЧЕН</span>';
+            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
+            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
 
             const photoUrl = JSON.parse(a.image_urls || '[]')[0] || '';
 
@@ -274,9 +287,9 @@
         `}).join('');
     }
 
-    function openAct(act) {
+    async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
-        document.getElementById('assignSection').style.display = 'none'; // Прячем селектор по умолчанию
+        document.getElementById('assignSection').style.display = 'none'; 
         
         const d = new Date(act.created_at).toLocaleDateString();
         document.getElementById('pNumber').innerText = act.id.substring(0,6).toUpperCase();
@@ -297,6 +310,19 @@
             </tr>
         `;
 
+        // ЗАГРУЗКА ОТЧЕТОВ ИЗ МОБИЛЬНОГО ПРИЛОЖЕНИЯ
+        const { data: reports } = await _supabase.from('remediation_reports').select('*').eq('act_id', act.id).order('created_at', { ascending: false });
+        const reportContainer = document.getElementById('remediationReportSection');
+        if (reports && reports.length > 0) {
+            reportContainer.innerHTML = `
+                <div class="remediation-report-box">
+                    <b style="color:var(--remediated)">📝 МОНИТОРИНГ УСТРАНЕНИЯ:</b>
+                    ${reports.map(r => `<p style="font-size:12px; margin:5px 0;"><b>${r.worker_name}:</b> ${r.comment} <small style="color:#666">(${new Date(r.created_at).toLocaleDateString()})</small></p>`).join('')}
+                </div>`;
+        } else {
+            reportContainer.innerHTML = "";
+        }
+
         document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved 
             ? `<div class="stamp stamp-blue">СОГЛАСОВАНО<br>${act.signer_name_dept || 'НАЧ. ОТДЕЛА'}</div>` 
             : `<span style="color:#ccc">(ожидает согласования)</span>`;
@@ -305,7 +331,6 @@
             ? `<div class="stamp stamp-green">ПОДПИСАНО ЭЦП<br>НОСОВ А.Б.</div>` 
             : `<span style="color:#ccc">(на подписи)</span>`;
 
-        // Отображение имени назначенного лица (ищем по ID в нашем массиве allUsers)
         const assignedUser = allUsers.find(u => u.id === act.assigned_to);
         document.getElementById('assignmentInfo').innerHTML = act.assigned_to 
             ? `👤 Исполнитель: <b>${assignedUser ? assignedUser.username : 'Загрузка...'}</b>` 
@@ -314,88 +339,62 @@
         const btnBox = document.getElementById('pSignAction');
         btnBox.innerHTML = "";
 
-        // Кнопки согласования
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
             btnBox.innerHTML = `
                 <div style="display:flex; gap:10px;">
                     <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>
                     <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
-                </div>
-            `;
+                </div>`;
         } 
-        else if (currentUser.role === 'Начальник управления' && act.is_dept_approved && !act.is_fully_signed) {
+        else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
             btnBox.innerHTML = `
                 <div style="display:flex; gap:10px;">
                     <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>
                     <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
-                </div>
-            `;
+                </div>`;
         }
 
-        // Кнопка показа выбора исполнителя (только для начальников подразделения)
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department) {
-            btnBox.innerHTML += `
-                <button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:5px;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>
-            `;
+            btnBox.innerHTML += `<button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:5px;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
         }
 
         const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-bottom:5px;">`).join('');
+        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-bottom:5px; border-radius:5px;">`).join('');
     }
 
-    // Показать интерфейс выбора пользователя
     function showAssignUI(actId) {
         const section = document.getElementById('assignSection');
         const select = document.getElementById('userSelect');
         section.style.display = 'block';
-        
-        select.innerHTML = '<option value="">-- Выберите из списка --</option>' + 
-            allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
-            
+        select.innerHTML = '<option value="">-- Выберите из списка --</option>' + allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
         document.getElementById('confirmAssignBtn').onclick = () => saveAssignment(actId, select.value);
     }
 
     async function saveAssignment(actId, userUuid) {
         if (!userUuid) return alert("Выберите исполнителя!");
-        
         const { error } = await _supabase.from('acts').update({ assigned_to: userUuid }).eq('id', actId);
-        
-        if (error) {
-            alert("Ошибка при назначении: " + error.message);
-        } else {
-            alert("Исполнитель назначен!");
-            closeAct();
-            loadActs();
-        }
+        if (error) alert("Ошибка: " + error.message);
+        else { alert("Исполнитель назначен!"); closeAct(); loadActs(); }
     }
 
     async function approveDept(id) {
-        if(confirm("Согласовать акт и отправить в управление?")) {
-            const { error } = await _supabase.from('acts').update({ 
-                is_dept_approved: true,
-                signer_name_dept: currentUser.username 
-            }).eq('id', id);
-            if(error) alert(error.message);
-            else { closeAct(); loadActs(); }
+        if(confirm("Согласовать акт?")) {
+            await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id);
+            closeAct(); loadActs();
         }
     }
 
     async function signFully(id) {
-        if(confirm("Подписать акт? Он станет виден в цеху.")) {
-            const { error } = await _supabase.from('acts').update({ 
-                is_fully_signed: true,
-                signer_name_admin: 'Носов А.Б.'
-            }).eq('id', id);
-            if(error) alert(error.message);
-            else { closeAct(); loadActs(); }
+        if(confirm("Подписать акт окончательно?")) {
+            await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Носов А.Б.' }).eq('id', id);
+            closeAct(); loadActs();
         }
     }
 
     async function rejectAct(id) {
-        if(confirm("Вы действительно хотите удалить этот акт из системы?")) {
-            const { error } = await _supabase.from('acts').delete().eq('id', id);
-            if(error) alert(error.message);
-            else { closeAct(); loadActs(); }
+        if(confirm("Удалить акт?")) {
+            await _supabase.from('acts').delete().eq('id', id);
+            closeAct(); loadActs();
         }
     }
 
