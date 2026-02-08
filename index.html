@@ -265,18 +265,31 @@
 
         const filtered = data.filter(a => {
             let isVisible = false;
-            if (currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') {
-                isVisible = (a.created_by_dept === currentUser.department || a.target_shop === currentUser.department);
+            
+            // ЛОГИКА ВИДИМОСТИ
+            if (currentUser.role === 'Начальник отдела') {
+                // Видит свои созданные или если это его цех
+                isVisible = (a.created_by_dept === currentUser.department);
             } 
             else if (currentUser.role === 'Начальник управления') {
+                // Видит только согласованные отделом (готовые к подписи управления) или уже архивные
                 isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+            }
+            else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ'))) {
+                // ИСПРАВЛЕНИЕ: Начальник цеха видит акт ТОЛЬКО после подписи Начальника управления
+                if (a.target_shop === currentUser.department) {
+                    isVisible = a.is_fully_signed === true; 
+                } else {
+                    isVisible = false;
+                }
             } 
             else if (currentUser.role === 'Назначенное лицо') {
-                isVisible = (a.assigned_to === currentUser.id);
+                 isVisible = (a.assigned_to === currentUser.id);
             } 
-            else { isVisible = true; }
+            else { isVisible = true; } // Админ видит всё
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+            
             let matchesStatus = true;
             if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
             else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
@@ -312,26 +325,52 @@
         // 1. Подготовка данных
         const d = new Date(act.created_at).toLocaleDateString();
         
-        // Логика номера: берем только цифры из ID, если их нет - ставим случайные, + индекс 11
-        let seqNum = act.id.replace(/\D/g, ''); 
-        if (seqNum.length > 4) seqNum = seqNum.substring(0, 3); 
-        if (!seqNum) seqNum = Math.floor(Math.random() * 100).toString();
-        const fullNumber = `${seqNum}/11`;
+        // ЛОГИКА НОМЕРА: Берем часть ID (hex), чтобы выглядело как индекс документа, а не 794
+        // Например B7F/11
+        let seqNum = act.id.substring(0, 4).toUpperCase(); 
+        const deptIndex = act.dept_index || "11"; 
+        const fullNumber = `${seqNum}/${deptIndex}`;
 
         const deptName = act.created_by_dept || "Отдел пожарной безопасности";
         const targetShop = act.target_shop || "Цех";
-        const inspectorName = act.inspector || "А.В. Камардин";
+        const inspectorName = act.inspector || "Инспектор";
         
+        // ЛОГИКА ТЕКСТА КОНТРОЛЯ
+        let controlType = "промышленной безопасности, охраны труда и окружающей среды";
+        if (deptName.includes("ПБ") || deptName.toLowerCase().includes("пожар")) {
+            controlType = "пожарной безопасности";
+        } else if (deptName.includes("ОТ") || deptName.toLowerCase().includes("охраны труда")) {
+            controlType = "охраны труда";
+        }
+
         // Парсинг нарушения
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
-        const law = act.violation_article || 'ППР РФ';
+        
+        // ДОБАВЛЕНИЕ ПОСТАНОВЛЕНИЯ №1479
+        let law = act.violation_article || 'ППР РФ';
+        if (law.includes("ППР РФ") && !law.includes("1479")) {
+            law += " утв. Постановлением Правительства Российской Федерации от 16 сентября 2020 г. №1479";
+        }
+
         const action = act.action_required || 'Устранить нарушение';
         const deadline = act.deadline || '—';
         const responsible = act.responsible_person || 'Начальник цеха';
 
-        // 2. Генерация HTML (Строго по вашему тексту)
+        // ГЕНЕРАЦИЯ ШТАМПОВ
+        const deptStamp = act.is_dept_approved 
+            ? `<div style="border: 2px solid #28a745; color: #28a745; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">СОГЛАСОВАНО<br><span style="font-size:10px">ЭЛЕКТРОННО</span></div>` 
+            : `<span style="color:#ccc;">(ожидает согласования)</span>`;
+
+        const adminStamp = act.is_fully_signed
+            ? `<div style="border: 2px solid #0056b3; color: #0056b3; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">ПОДПИСАНО<br><span style="font-size:10px">Начальник УПБ, ОТ и ОС<br>Саруханов Г.М.</span></div>`
+            : `<span style="color:#ccc;">(на подписи)</span>`;
+
+        // 2. Генерация HTML
         const contentHTML = `
-            <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2;">
+            <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2; padding: 20px; position: relative;">
+                
+                <div onclick="closeAct()" style="position: absolute; top: -10px; right: -10px; cursor: pointer; font-size: 30px; font-weight: bold; color: #aaa; padding: 10px;">&times;</div>
+
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; font-size:14px;">
                     <div style="width:45%;">
                         <div style="border:1px solid #ccc; padding:5px;">${deptName}</div>
@@ -351,22 +390,22 @@
                 </div>
 
                 <p style="text-indent:30px; margin-bottom:15px; text-align:justify;">
-                    В ходе осуществления ежедневного контроля требований ${deptName} в подразделении ${targetShop} ${d} были выявлены нарушения:
+                    В ходе осуществления ежедневного контроля требований <b>${controlType}</b> в подразделении <b>${targetShop}</b> ${d} были выявлены нарушения:
                 </p>
 
                 <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
                     <thead>
                         <tr style="background:#f0f0f0;">
-                            <th style="border:1px solid black; padding:5px; width:30px;">№ п/п</th>
-                            <th style="border:1px solid black; padding:5px;">Перечень выявленных нарушений</th>
-                            <th style="border:1px solid black; padding:5px;">Наименование нормативного документа</th>
-                            <th style="border:1px solid black; padding:5px;">Мероприятия по устранению</th>
-                            <th style="border:1px solid black; padding:5px; width:80px;">Сроки устранения</th>
+                            <th style="border:1px solid black; padding:5px; width:30px;">№</th>
+                            <th style="border:1px solid black; padding:5px;">Выявленные нарушения</th>
+                            <th style="border:1px solid black; padding:5px;">Документ</th>
+                            <th style="border:1px solid black; padding:5px;">Мероприятия</th>
+                            <th style="border:1px solid black; padding:5px; width:80px;">Сроки</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">1.</td>
+                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">1</td>
                             <td style="border:1px solid black; padding:5px; vertical-align:top;">
                                 ${violation}<br><br>
                                 <b>Ответственный:</b> ${responsible}
@@ -378,35 +417,29 @@
                     </tbody>
                 </table>
 
-                <div style="font-size:12px; margin-bottom:20px;">
-                    <p>Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки и могут отменяться только генеральным директором Общества.</p>
-                    <p style="margin-top:10px;">По истечение указанных сроков устранения о выполнении сообщать в<br><b>Управление промышленной безопасности, охраны труда и окружающей среды.</b></p>
-                </div>
-
-                <div style="display:flex; justify-content:space-between; margin-top:30px; align-items:flex-end;">
-                    <div style="width:40%;">
-                        <b>Начальник управления</b><br>
-                        ${act.is_fully_signed ? '<span style="color:green; border:1px solid green; padding:2px 5px; font-size:10px;">Подписано электронно<br>'+d+'</span>' : '<span style="color:#ccc;">(на подписи)</span>'}
+                <div style="margin-top:20px; margin-bottom:20px;">
+                     <div style="margin-bottom: 10px;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b></div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                         <div>(А.Б. Носов)</div>
+                         <div>${adminStamp}</div>
                     </div>
-                    <div style="width:40%; text-align:right;">
-                        <b>Г.М. Саруханов</b>
+                    
+                    <div style="margin-top: 20px; margin-bottom: 10px;"><b>Согласовано (Нач. отдела):</b></div>
+                     <div style="display:flex; justify-content:space-between; align-items:center;">
+                         <div>${deptName}</div>
+                         <div>${deptStamp}</div>
                     </div>
                 </div>
-
-                <div style="margin-top:40px; border-top:1px dashed #ccc; padding-top:10px; display:flex; justify-content:space-between;">
-                     <div style="width:45%;">
-                        Предписание получил:<br><br>
-                        ___________________ (дата)<br><br>
-                        ___________________ (ФИО)
-                     </div>
-                     <div style="width:45%; font-size:12px; text-align:right;">
-                        <b>${deptName}</b><br>
-                        ${inspectorName}<br>
-                        Тел. 8 994 021 73 13
+                
+                <div style="margin-top:30px; padding-top:10px; border-top:1px dashed #ccc;">
+                     <div style="font-size:12px; color: #555;">
+                        <b>Статус получения (Цех):</b><br>
+                        ${act.is_fully_signed ? '<span style="color:green">Документ передан в системе ЭДО. Ожидает исполнения.</span>' : '<span style="color:orange">Документ в процессе оформления.</span>'}
                      </div>
                 </div>
 
-                <div id="photoContainer" style="margin-top:20px;"></div>
+                <div style="margin-top:20px; border-bottom: 2px solid black; font-weight:bold;">Фотофиксация нарушения:</div>
+                <div id="photoContainer" style="margin-top:10px;"></div>
 
                 <div id="remediationReports" style="margin-top:20px;"></div>
             </div>
@@ -414,22 +447,20 @@
             <div id="actionButtons" style="margin-top:30px; padding-top:20px; border-top:2px solid #eee;"></div>
         `;
 
-        // Вставка в модальное окно (ИЩЕМ div id="printableArea")
+        // Вставка в модальное окно
         const container = document.getElementById('printableArea');
         if (container) {
             container.innerHTML = contentHTML;
         } else {
-            // Если div не найден, пробуем вставить в тело модалки, но лучше добавить div в HTML
-            console.error('Создайте <div id="printableArea"></div> внутри actModal!');
             alert('Ошибка отображения: отсутствует id="printableArea"');
             return;
         }
 
-        // 3. Добавление фото
+        // 3. Добавление фото (УВЕЛИЧЕННЫЕ)
         const photos = JSON.parse(act.image_urls || "[]");
         document.getElementById('photoContainer').innerHTML = photos.length > 0 
-            ? `<b>Фотофиксация:</b><br>` + photos.map(url => `<img src="${url}" style="width:100px; margin:5px; border:1px solid #ccc;">`).join('')
-            : "";
+            ? photos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="cursor:zoom-in; width:100%; max-width:400px; margin:5px 0; border:1px solid #ccc; display:block; border-radius:4px;">`).join('')
+            : "Нет фото";
 
         // 4. Добавление отчетов
         const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
@@ -459,7 +490,7 @@
         }
         
         // Кнопка Назначения исполнителя
-        if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department) {
+        if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
             html += `<br><button onclick="showAssignUI('${act.id}')" style="background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; margin-top:10px; cursor:pointer;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
         }
         
@@ -467,11 +498,6 @@
     }
 
     function showAssignUI(actId) {
-        // Простая логика назначения через prompt для экономии места, или можно развернуть UI
-        // Для полного UI нужен блок div id="assignSection" в HTML, но мы его переписали.
-        // Сделаем через стандартный confirm/prompt или вернем скрытый блок в конец
-        
-        // Восстановим блок назначения временно внизу
         const assignDiv = document.createElement('div');
         assignDiv.style.marginTop = "15px";
         assignDiv.style.padding = "10px";
@@ -503,7 +529,7 @@
     }
 
     async function signFully(id) {
-        if(confirm("Подписать акт окончательно?")) {
+        if(confirm("Подписать акт окончательно? После этого его увидит цех.")) {
             await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Носов А.Б.' }).eq('id', id);
             closeAct(); loadActs();
         }
@@ -521,6 +547,7 @@
 </script>
 </body>
 </html>
+
 
 
 
