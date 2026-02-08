@@ -194,7 +194,7 @@
 
            
 <script>
-const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
+    const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
@@ -203,11 +203,10 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
 
     document.addEventListener('DOMContentLoaded', checkSession);
 
-    // --- ФУНКЦИЯ ВХОДА ---
+    // --- АВТОРИЗАЦИЯ ---
     async function signIn() {
         const loginInput = document.getElementById('userLogin');
         const passInput = document.getElementById('userPass');
-        
         const login = loginInput.value.trim();
         const pass = passInput.value;
 
@@ -256,6 +255,7 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
         loadActs();
     }
 
+    // --- ЗАГРУЗКА СПИСКА АКТОВ ---
     async function loadActs() {
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (!data) return;
@@ -265,7 +265,6 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
 
         const filtered = data.filter(a => {
             let isVisible = false;
-            
             if (currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') {
                 isVisible = (a.created_by_dept === currentUser.department || a.target_shop === currentUser.department);
             } 
@@ -275,12 +274,9 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
             else if (currentUser.role === 'Назначенное лицо') {
                 isVisible = (a.assigned_to === currentUser.id);
             } 
-            else {
-                isVisible = true; 
-            }
+            else { isVisible = true; }
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-            
             let matchesStatus = true;
             if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
             else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
@@ -291,7 +287,7 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
 
         document.getElementById('actsTable').innerHTML = filtered.map(a => {
             let statusBadge = '';
-            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО (В РАБОТЕ)</span>';
+            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
             else if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ ПОЛУЧЕН</span>';
             else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
             else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
@@ -305,103 +301,88 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
                 <td><img src="${photoUrl}" class="act-thumb" onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'"></td>
                 <td style="font-size:12px;">${(a.violation_desc || "").substring(0,60)}...</td>
                 <td align="center">${statusBadge}</td>
-            </tr>
-        `}).join('');
+            </tr>`;
+        }).join('');
     }
 
+    // --- ОТКРЫТИЕ АКТА (ПРОСМОТР ПРЕДПИСАНИЯ) ---
     async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
         document.getElementById('assignSection').style.display = 'none'; 
         
         const d = new Date(act.created_at).toLocaleDateString();
-        document.getElementById('pNumber').innerText = act.id.substring(0,6).toUpperCase();
-        document.getElementById('pDate').innerText = d;
-        document.getElementById('pDateText').innerText = d;
-        document.getElementById('pDeptText').innerText = act.target_shop || "—";
+        const shortId = act.id.substring(0,2).toUpperCase();
+        const deptIdx = act.dept_index || "11"; 
 
-        const lawMatch = (act.violation_desc || "").match(/Статья:\s*(.*)\n/);
+        // Заполнение шапки по вашему примеру
+        document.getElementById('pDate').innerText = d;
+        document.getElementById('pNumber').innerText = `${shortId}/${deptIdx}`;
+        document.getElementById('pDeptText').innerText = act.target_shop || "—";
+        
+        // Вставка официального текста вступления
+        const introElement = document.getElementById('pIntroText'); 
+        if (introElement) {
+            introElement.innerText = `В ходе осуществления ежедневного контроля требований пожарной безопасности в подразделении ${act.target_shop || '—'} ${d}г. были выявлены нарушения:`;
+        }
+
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
 
+        // Таблица нарушений
         document.getElementById('pTableBody').innerHTML = `
             <tr>
-                <td class="col-pp">1</td>
-                <td>${violation}</td>
-                <td class="col-law">${lawMatch ? lawMatch[1] : 'ППР РФ'}</td>
-                <td class="col-action">Устранить нарушение</td>
-                <td class="col-time">${act.deadline || '—'}</td>
-            </tr>
-        `;
+                <td align="center">1</td>
+                <td>${violation}<br><br><b>Ответственный:</b> ${act.responsible_person || 'Начальник цеха'}</td>
+                <td style="font-size:11px;">${act.violation_article || 'ППР РФ №1479'}</td>
+                <td>${act.action_required || 'Устранить нарушение'}</td>
+                <td align="center">${act.deadline || '—'}</td>
+            </tr>`;
 
-        // Загрузка отчетов об устранении
-        const { data: reports } = await _supabase
-            .from('remediation_reports')
-            .select('*, profiles!worker_id(username)')
-            .eq('act_id', act.id)
-            .order('created_at', { ascending: false });
+        // Блок подписи и контакты инспектора
+        document.getElementById('uSignStatus').innerHTML = `
+            <div style="display:flex; justify-content:space-between; margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+                <div style="text-align:left;"><b>Начальник управления</b><br><small style="color:green">Подписано электронно</small></div>
+                <div style="text-align:right;"><b>Г.М. Саруханов</b></div>
+            </div>
+            <div style="margin-top:30px; text-align:left; font-size:12px;">
+                <b>${act.created_by_dept || 'Отдел пожарной безопасности'}</b><br>
+                ${act.inspector || 'Инспектор'}<br>
+                Тел. 8 994 021 73 13
+            </div>`;
 
+        // Фотофиксация
+        const photos = JSON.parse(act.image_urls || "[]");
+        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-top:10px; border-radius:5px;">`).join('');
+
+        // Загрузка отчетов (мониторинг)
+        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
         const reportContainer = document.getElementById('remediationReportSection');
-        if (reports && reports.length > 0) {
-            reportContainer.innerHTML = `
-                <div class="remediation-report-box">
-                    <b style="color:var(--remediated)">📝 МОНИТОРИНГ УСТРАНЕНИЯ:</b>
-                    ${reports.map(r => `
-                        <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
-                            <p style="font-size:13px; margin:5px 0;">
-                                <b>${r.profiles ? r.profiles.username : 'Исполнитель'}:</b> ${r.description} 
-                                <br><small style="color:#666">${new Date(r.created_at).toLocaleString()}</small>
-                            </p>
-                            ${r.photo_url ? `<img src="${r.photo_url}" class="report-photo">` : ''}
-                        </div>
-                    `).join('')}
-                </div>`;
-        } else {
-            reportContainer.innerHTML = "";
-        }
+        reportContainer.innerHTML = (reports && reports.length > 0) 
+            ? `<div class="remediation-report-box"><b>📝 ОТЧЕТЫ:</b>` + reports.map(r => `<p style="font-size:12px;"><b>${r.profiles?.username}:</b> ${r.description}</p>`).join('') + `</div>`
+            : "";
 
-        document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved 
-            ? `<div class="stamp stamp-blue">СОГЛАСОВАНО<br>${act.signer_name_dept || 'НАЧ. ОТДЕЛА'}</div>` 
-            : `<span style="color:#ccc">(ожидает согласования)</span>`;
+        // Кнопки управления
+        renderActionButtons(act);
+    }
 
-        document.getElementById('uSignStatus').innerHTML = act.is_fully_signed 
-            ? `<div class="stamp stamp-green">ПОДПИСАНО ЭЦП<br>НОСОВ А.Б.</div>` 
-            : `<span style="color:#ccc">(на подписи)</span>`;
-
-        const assignedUser = allUsers.find(u => u.id === act.assigned_to);
-        document.getElementById('assignmentInfo').innerHTML = act.assigned_to 
-            ? `👤 Исполнитель: <b>${assignedUser ? assignedUser.username : 'Загрузка...'}</b>` 
-            : "<i>Исполнитель не назначен</i>";
-
+    function renderActionButtons(act) {
         const btnBox = document.getElementById('pSignAction');
         btnBox.innerHTML = "";
-
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            btnBox.innerHTML = `
-                <div style="display:flex; gap:10px;">
-                    <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>
-                    <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
-                </div>`;
+            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; width:100%;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
         } 
         else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
-            btnBox.innerHTML = `
-                <div style="display:flex; gap:10px;">
-                    <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>
-                    <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
-                </div>`;
+            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; width:100%;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
         }
-
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department) {
-            btnBox.innerHTML += `<button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:5px;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
+            btnBox.innerHTML += `<button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:10px; width:100%;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
         }
-
-        const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-bottom:5px; border-radius:5px;">`).join('');
     }
 
     function showAssignUI(actId) {
         const section = document.getElementById('assignSection');
         const select = document.getElementById('userSelect');
         section.style.display = 'block';
-        select.innerHTML = '<option value="">-- Выберите из списка --</option>' + allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+        select.innerHTML = '<option value="">-- Выберите исполнителя --</option>' + allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
         document.getElementById('confirmAssignBtn').onclick = () => saveAssignment(actId, select.value);
     }
 
@@ -426,18 +407,12 @@ const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
         }
     }
 
-    async function rejectAct(id) {
-        if(confirm("Удалить акт?")) {
-            await _supabase.from('acts').delete().eq('id', id);
-            closeAct(); loadActs();
-        }
-    }
-
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     async function signOut() { await _supabase.auth.signOut(); location.reload(); }
 </script>
 </body>
 </html>
+
 
 
 
