@@ -64,16 +64,22 @@
 
         .remediation-report-box {
             margin-top: 15px;
-            padding: 10px;
+            padding: 15px;
             background: #f0f7ff;
-            border-left: 4px solid var(--remediated);
+            border-left: 5px solid var(--remediated);
             border-radius: 4px;
+        }
+        .report-photo {
+            max-width: 200px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
         }
     </style>
 </head>
 <body>
 
-<div id="loginForm" class="auth-card" style="display: none;">
+<div id="loginForm" class="auth-card">
     <h1 style="color: var(--primary);">EHS Мониторинг</h1>
     <input type="text" id="userLogin" placeholder="Логин" style="width: 100%; box-sizing: border-box;">
     <input type="password" id="userPass" placeholder="Пароль" style="margin-top:10px; width: 100%; box-sizing: border-box;">
@@ -179,7 +185,7 @@
         <div id="pSignAction" style="text-align: center; margin-top: 30px; display: flex; flex-direction: column; gap: 10px;"></div>
         
         <div style="margin-top: 30px;">
-            <div style="font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; font-size: 14px;">Фотофиксация:</div>
+            <div style="font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; font-size: 14px;">Фотофиксация нарушения:</div>
             <div id="pPhotos" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;"></div>
         </div>
     </div>
@@ -247,7 +253,6 @@
                 isVisible = (a.created_by_dept === currentUser.department || a.target_shop === currentUser.department);
             } 
             else if (currentUser.role === 'Начальник управления') {
-                // Видит те что на согласовании ИЛИ те, по которым пришел отчет
                 isVisible = (a.is_dept_approved === true || a.is_remediated === true);
             } 
             else if (currentUser.role === 'Назначенное лицо') {
@@ -310,14 +315,27 @@
             </tr>
         `;
 
-        // ЗАГРУЗКА ОТЧЕТОВ ИЗ МОБИЛЬНОГО ПРИЛОЖЕНИЯ
-        const { data: reports } = await _supabase.from('remediation_reports').select('*').eq('act_id', act.id).order('created_at', { ascending: false });
+        // --- НОВАЯ ЗАГРУЗКА ОТЧЕТОВ С ИМЕНЕМ РАБОТНИКА ---
+        const { data: reports } = await _supabase
+            .from('remediation_reports')
+            .select('*, profiles!worker_id(username)') // Связываем с таблицей профилей через worker_id
+            .eq('act_id', act.id)
+            .order('created_at', { ascending: false });
+
         const reportContainer = document.getElementById('remediationReportSection');
         if (reports && reports.length > 0) {
             reportContainer.innerHTML = `
                 <div class="remediation-report-box">
                     <b style="color:var(--remediated)">📝 МОНИТОРИНГ УСТРАНЕНИЯ:</b>
-                    ${reports.map(r => `<p style="font-size:12px; margin:5px 0;"><b>${r.worker_name}:</b> ${r.comment} <small style="color:#666">(${new Date(r.created_at).toLocaleDateString()})</small></p>`).join('')}
+                    ${reports.map(r => `
+                        <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                            <p style="font-size:13px; margin:5px 0;">
+                                <b>${r.profiles ? r.profiles.username : 'Исполнитель'}:</b> ${r.description} 
+                                <br><small style="color:#666">${new Date(r.created_at).toLocaleString()}</small>
+                            </p>
+                            ${r.photo_url ? `<img src="${r.photo_url}" class="report-photo">` : ''}
+                        </div>
+                    `).join('')}
                 </div>`;
         } else {
             reportContainer.innerHTML = "";
