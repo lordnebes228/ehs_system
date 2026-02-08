@@ -315,6 +315,73 @@
             </tr>
         `;
 
+        // --- ОБНОВЛЕННАЯ ЗАГРУЗКА ОТЧЕТОВ С ИМЕНЕМ ИСПОЛНИТЕЛЯ ---
+        const { data: reports } = await _supabase
+            .from('remediation_reports')
+            .select('*, profiles!worker_id(username)') // Получаем имя из связанной таблицы профилей
+            .eq('act_id', act.id)
+            .order('created_at', { ascending: false });
+
+        const reportContainer = document.getElementById('remediationReportSection');
+        if (reports && reports.length > 0) {
+            reportContainer.innerHTML = `
+                <div class="remediation-report-box">
+                    <b style="color:var(--remediated)">📝 МОНИТОРИНГ УСТРАНЕНИЯ:</b>
+                    ${reports.map(r => `
+                        <div style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">
+                            <p style="font-size:13px; margin:5px 0;">
+                                <b>${r.profiles ? r.profiles.username : 'Исполнитель'}:</b> ${r.description} 
+                                <br><small style="color:#666">${new Date(r.created_at).toLocaleString()}</small>
+                            </p>
+                            ${r.photo_url ? `<img src="${r.photo_url}" class="report-photo">` : ''}
+                        </div>
+                    `).join('')}
+                </div>`;
+        } else {
+            reportContainer.innerHTML = "";
+        }
+
+        // --- ЛОГИКА ШТАМПОВ ---
+        document.getElementById('deptSignStatus').innerHTML = act.is_dept_approved 
+            ? `<div class="stamp stamp-blue">СОГЛАСОВАНО<br>${act.signer_name_dept || 'НАЧ. ОТДЕЛА'}</div>` 
+            : `<span style="color:#ccc">(ожидает согласования)</span>`;
+
+        document.getElementById('uSignStatus').innerHTML = act.is_fully_signed 
+            ? `<div class="stamp stamp-green">ПОДПИСАНО ЭЦП<br>НОСОВ А.Б.</div>` 
+            : `<span style="color:#ccc">(на подписи)</span>`;
+
+        // --- ИНФОРМАЦИЯ О НАЗНАЧЕНИИ ---
+        const assignedUser = allUsers.find(u => u.id === act.assigned_to);
+        document.getElementById('assignmentInfo').innerHTML = act.assigned_to 
+            ? `👤 Исполнитель: <b>${assignedUser ? assignedUser.username : 'Загрузка...'}</b>` 
+            : "<i>Исполнитель не назначен</i>";
+
+        const btnBox = document.getElementById('pSignAction');
+        btnBox.innerHTML = "";
+
+        // --- ЛОГИКА КНОПОК УПРАВЛЕНИЯ ---
+        if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
+            btnBox.innerHTML = `
+                <div style="display:flex; gap:10px;">
+                    <button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; flex:1;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>
+                    <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
+                </div>`;
+        } 
+        else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
+            btnBox.innerHTML = `
+                <div style="display:flex; gap:10px;">
+                    <button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; flex:1;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>
+                    <button onclick="rejectAct('${act.id}')" style="background:var(--danger); color:white; padding:15px; border-radius:10px; width:100px;">УДАЛИТЬ</button>
+                </div>`;
+        }
+
+        if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department) {
+            btnBox.innerHTML += `<button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:5px;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
+        }
+
+        const photos = JSON.parse(act.image_urls || "[]");
+        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-bottom:5px; border-radius:5px;">`).join('');
+    }
         // --- НОВАЯ ЗАГРУЗКА ОТЧЕТОВ С ИМЕНЕМ РАБОТНИКА ---
         const { data: reports } = await _supabase
             .from('remediation_reports')
@@ -421,3 +488,4 @@
 </script>
 </body>
 </html>
+
