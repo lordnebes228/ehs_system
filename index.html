@@ -305,85 +305,187 @@
         }).join('');
     }
 
-    // --- ОТКРЫТИЕ АКТА (ПРОСМОТР ПРЕДПИСАНИЯ) ---
+    // --- ОТКРЫТИЕ АКТА (ГЕНЕРАЦИЯ ДОКУМЕНТА) ---
     async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
-        document.getElementById('assignSection').style.display = 'none'; 
         
+        // 1. Подготовка данных
         const d = new Date(act.created_at).toLocaleDateString();
-        const shortId = act.id.substring(0,2).toUpperCase();
-        const deptIdx = act.dept_index || "11"; 
-
-        // Заполнение шапки по вашему примеру
-        document.getElementById('pDate').innerText = d;
-        document.getElementById('pNumber').innerText = `${shortId}/${deptIdx}`;
-        document.getElementById('pDeptText').innerText = act.target_shop || "—";
         
-        // Вставка официального текста вступления
-        const introElement = document.getElementById('pIntroText'); 
-        if (introElement) {
-            introElement.innerText = `В ходе осуществления ежедневного контроля требований пожарной безопасности в подразделении ${act.target_shop || '—'} ${d}г. были выявлены нарушения:`;
+        // Логика номера: берем только цифры из ID, если их нет - ставим случайные, + индекс 11
+        let seqNum = act.id.replace(/\D/g, ''); 
+        if (seqNum.length > 4) seqNum = seqNum.substring(0, 3); 
+        if (!seqNum) seqNum = Math.floor(Math.random() * 100).toString();
+        const fullNumber = `${seqNum}/11`;
+
+        const deptName = act.created_by_dept || "Отдел пожарной безопасности";
+        const targetShop = act.target_shop || "Цех";
+        const inspectorName = act.inspector || "А.В. Камардин";
+        
+        // Парсинг нарушения
+        const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
+        const law = act.violation_article || 'ППР РФ';
+        const action = act.action_required || 'Устранить нарушение';
+        const deadline = act.deadline || '—';
+        const responsible = act.responsible_person || 'Начальник цеха';
+
+        // 2. Генерация HTML (Строго по вашему тексту)
+        const contentHTML = `
+            <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; font-size:14px;">
+                    <div style="width:45%;">
+                        <div style="border:1px solid #ccc; padding:5px;">${deptName}</div>
+                    </div>
+                    <div style="width:45%; text-align:right;">
+                        <div style="border:1px solid #ccc; padding:5px;">Руководителям подразделений<br>№ 310</div>
+                    </div>
+                </div>
+
+                <div style="text-align:center; margin-bottom:15px;">
+                    <h2 style="margin:0; font-size:18px; font-weight:bold;">ПРЕДПИСАНИЕ</h2>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:14px; border-bottom:1px solid #000; padding-bottom:5px;">
+                    <div>${d} <span style="font-size:10px; color:#666;">дата</span></div>
+                    <div>№ ${fullNumber}</div>
+                </div>
+
+                <p style="text-indent:30px; margin-bottom:15px; text-align:justify;">
+                    В ходе осуществления ежедневного контроля требований ${deptName} в подразделении ${targetShop} ${d} были выявлены нарушения:
+                </p>
+
+                <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
+                    <thead>
+                        <tr style="background:#f0f0f0;">
+                            <th style="border:1px solid black; padding:5px; width:30px;">№ п/п</th>
+                            <th style="border:1px solid black; padding:5px;">Перечень выявленных нарушений</th>
+                            <th style="border:1px solid black; padding:5px;">Наименование нормативного документа</th>
+                            <th style="border:1px solid black; padding:5px;">Мероприятия по устранению</th>
+                            <th style="border:1px solid black; padding:5px; width:80px;">Сроки устранения</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">1.</td>
+                            <td style="border:1px solid black; padding:5px; vertical-align:top;">
+                                ${violation}<br><br>
+                                <b>Ответственный:</b> ${responsible}
+                            </td>
+                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${law}</td>
+                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${action}</td>
+                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">${deadline}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="font-size:12px; margin-bottom:20px;">
+                    <p>Мероприятия по устранению, перечисленные в настоящем предписании, обязательны для исполнения в указанные сроки и могут отменяться только генеральным директором Общества.</p>
+                    <p style="margin-top:10px;">По истечение указанных сроков устранения о выполнении сообщать в<br><b>Управление промышленной безопасности, охраны труда и окружающей среды.</b></p>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; margin-top:30px; align-items:flex-end;">
+                    <div style="width:40%;">
+                        <b>Начальник управления</b><br>
+                        ${act.is_fully_signed ? '<span style="color:green; border:1px solid green; padding:2px 5px; font-size:10px;">Подписано электронно<br>'+d+'</span>' : '<span style="color:#ccc;">(на подписи)</span>'}
+                    </div>
+                    <div style="width:40%; text-align:right;">
+                        <b>Г.М. Саруханов</b>
+                    </div>
+                </div>
+
+                <div style="margin-top:40px; border-top:1px dashed #ccc; padding-top:10px; display:flex; justify-content:space-between;">
+                     <div style="width:45%;">
+                        Предписание получил:<br><br>
+                        ___________________ (дата)<br><br>
+                        ___________________ (ФИО)
+                     </div>
+                     <div style="width:45%; font-size:12px; text-align:right;">
+                        <b>${deptName}</b><br>
+                        ${inspectorName}<br>
+                        Тел. 8 994 021 73 13
+                     </div>
+                </div>
+
+                <div id="photoContainer" style="margin-top:20px;"></div>
+
+                <div id="remediationReports" style="margin-top:20px;"></div>
+            </div>
+
+            <div id="actionButtons" style="margin-top:30px; padding-top:20px; border-top:2px solid #eee;"></div>
+        `;
+
+        // Вставка в модальное окно (ИЩЕМ div id="printableArea")
+        const container = document.getElementById('printableArea');
+        if (container) {
+            container.innerHTML = contentHTML;
+        } else {
+            // Если div не найден, пробуем вставить в тело модалки, но лучше добавить div в HTML
+            console.error('Создайте <div id="printableArea"></div> внутри actModal!');
+            alert('Ошибка отображения: отсутствует id="printableArea"');
+            return;
         }
 
-        const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
-
-        // Таблица нарушений
-        document.getElementById('pTableBody').innerHTML = `
-            <tr>
-                <td align="center">1</td>
-                <td>${violation}<br><br><b>Ответственный:</b> ${act.responsible_person || 'Начальник цеха'}</td>
-                <td style="font-size:11px;">${act.violation_article || 'ППР РФ №1479'}</td>
-                <td>${act.action_required || 'Устранить нарушение'}</td>
-                <td align="center">${act.deadline || '—'}</td>
-            </tr>`;
-
-        // Блок подписи и контакты инспектора
-        document.getElementById('uSignStatus').innerHTML = `
-            <div style="display:flex; justify-content:space-between; margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
-                <div style="text-align:left;"><b>Начальник управления</b><br><small style="color:green">Подписано электронно</small></div>
-                <div style="text-align:right;"><b>Г.М. Саруханов</b></div>
-            </div>
-            <div style="margin-top:30px; text-align:left; font-size:12px;">
-                <b>${act.created_by_dept || 'Отдел пожарной безопасности'}</b><br>
-                ${act.inspector || 'Инспектор'}<br>
-                Тел. 8 994 021 73 13
-            </div>`;
-
-        // Фотофиксация
+        // 3. Добавление фото
         const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('pPhotos').innerHTML = photos.map(url => `<img src="${url}" style="width:100%; border:1px solid #ccc; margin-top:10px; border-radius:5px;">`).join('');
-
-        // Загрузка отчетов (мониторинг)
-        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
-        const reportContainer = document.getElementById('remediationReportSection');
-        reportContainer.innerHTML = (reports && reports.length > 0) 
-            ? `<div class="remediation-report-box"><b>📝 ОТЧЕТЫ:</b>` + reports.map(r => `<p style="font-size:12px;"><b>${r.profiles?.username}:</b> ${r.description}</p>`).join('') + `</div>`
+        document.getElementById('photoContainer').innerHTML = photos.length > 0 
+            ? `<b>Фотофиксация:</b><br>` + photos.map(url => `<img src="${url}" style="width:100px; margin:5px; border:1px solid #ccc;">`).join('')
             : "";
 
-        // Кнопки управления
+        // 4. Добавление отчетов
+        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
+        if (reports && reports.length > 0) {
+            document.getElementById('remediationReports').innerHTML = `<div style="background:#f9f9f9; padding:10px; border:1px solid #eee;"><b>📝 Отчеты об устранении:</b>` + 
+                reports.map(r => `<p style="font-size:12px; margin:5px 0;"><b>${r.profiles?.username}:</b> ${r.description}</p>`).join('') + `</div>`;
+        }
+
+        // 5. Рендер кнопок
         renderActionButtons(act);
     }
 
     function renderActionButtons(act) {
-        const btnBox = document.getElementById('pSignAction');
+        const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
+        
+        let html = "";
+        
+        // Кнопка Начальника отдела
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:var(--success); color:white; padding:15px; border-radius:10px; width:100%;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
+            html += `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
+            html += `<button onclick="rejectAct('${act.id}')" style="background:#dc3545; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer;">УДАЛИТЬ</button>`;
         } 
+        // Кнопка Начальника управления
         else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
-            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:var(--accent); color:white; padding:15px; border-radius:10px; width:100%;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
+            html += `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
         }
+        
+        // Кнопка Назначения исполнителя
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department) {
-            btnBox.innerHTML += `<button onclick="showAssignUI('${act.id}')" style="background:var(--admin); color:white; padding:10px; border-radius:10px; margin-top:10px; width:100%;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
+            html += `<br><button onclick="showAssignUI('${act.id}')" style="background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; margin-top:10px; cursor:pointer;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
         }
+        
+        btnBox.innerHTML = html;
     }
 
     function showAssignUI(actId) {
-        const section = document.getElementById('assignSection');
-        const select = document.getElementById('userSelect');
-        section.style.display = 'block';
-        select.innerHTML = '<option value="">-- Выберите исполнителя --</option>' + allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
-        document.getElementById('confirmAssignBtn').onclick = () => saveAssignment(actId, select.value);
+        // Простая логика назначения через prompt для экономии места, или можно развернуть UI
+        // Для полного UI нужен блок div id="assignSection" в HTML, но мы его переписали.
+        // Сделаем через стандартный confirm/prompt или вернем скрытый блок в конец
+        
+        // Восстановим блок назначения временно внизу
+        const assignDiv = document.createElement('div');
+        assignDiv.style.marginTop = "15px";
+        assignDiv.style.padding = "10px";
+        assignDiv.style.background = "#eee";
+        assignDiv.innerHTML = `
+            <select id="tempUserSelect" style="padding:5px;">
+                <option value="">-- Выберите исполнителя --</option>
+                ${allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
+            </select>
+            <button id="tempAssignBtn" style="padding:5px;">ОК</button>
+        `;
+        document.getElementById('actionButtons').appendChild(assignDiv);
+        
+        document.getElementById('tempAssignBtn').onclick = () => saveAssignment(actId, document.getElementById('tempUserSelect').value);
     }
 
     async function saveAssignment(actId, userUuid) {
@@ -406,12 +508,20 @@
             closeAct(); loadActs();
         }
     }
+    
+    async function rejectAct(id) {
+        if(confirm("Удалить этот акт?")) {
+             await _supabase.from('acts').delete().eq('id', id);
+             closeAct(); loadActs();
+        }
+    }
 
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     async function signOut() { await _supabase.auth.signOut(); location.reload(); }
 </script>
 </body>
 </html>
+
 
 
 
