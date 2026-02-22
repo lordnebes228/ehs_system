@@ -475,25 +475,40 @@
         renderActionButtons(act);
     }
 
-    function renderActionButtons(act) {
-        const btnBox = document.getElementById('actionButtons');
-        btnBox.innerHTML = "";
-        let html = "";
-        
-        if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            html += `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
-            html += `<button onclick="rejectAct('${act.id}')" style="background:#dc3545; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer;">УДАЛИТЬ</button>`;
-        } 
-        else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
-            html += `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
-        }
-        
-        if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
-            html += `<br><button onclick="showAssignUI('${act.id}')" style="background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; margin-top:10px; cursor:pointer;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
-        }
-        
-        btnBox.innerHTML = html;
+   function renderActionButtons(act) {
+    const btnBox = document.getElementById('actionButtons');
+    btnBox.innerHTML = "";
+    
+    let html = "";
+    
+    // Блок согласования для начальника отдела
+    if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
+        html += `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
+        html += `<button onclick="rejectAct('${act.id}')" style="background:#dc3545; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer;">УДАЛИТЬ</button>`;
+    } 
+    // Блок подписи для начальника управления
+    else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
+        html += `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:12px; border:none; border-radius:5px; margin-right:10px; cursor:pointer;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
     }
+    
+    // ЛОГИКА ОТОБРАЖЕНИЯ ИСПОЛНИТЕЛЯ НАД КНОПКОЙ (как вы просили)
+    if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
+        
+        // Находим имя исполнителя по его ID
+        const assignedUser = allUsers.find(u => u.id === act.assigned_to);
+        const nameText = assignedUser ? `<b>${assignedUser.username}</b>` : `<span style="color:#d9534f;">не назначен</span>`;
+        
+        html += `
+            <div style="margin-top: 15px; margin-bottom: 10px; font-size: 14px; color: #333; border-top: 1px solid #eee; padding-top: 10px;">
+                👤 <b>Исполнитель:</b> ${nameText}
+            </div>
+            <button onclick="showAssignUI('${act.id}')" style="background:#6c757d; color:white; padding:10px; border:none; border-radius:5px; cursor:pointer; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">👤</span> НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ
+            </button>`;
+    }
+    
+    btnBox.innerHTML = html;
+}
 
     function showAssignUI(actId) {
         const assignDiv = document.createElement('div');
@@ -518,6 +533,7 @@
 </script>
 </body>
 </html>
+
 
 
 
