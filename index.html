@@ -270,70 +270,78 @@
     }
 
     // --- ЗАГРУЗКА СПИСКА АКТОВ ---
-    async function loadActs() {
-        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-        if (!data) return;
+   async function loadActs() {
+    // 1. Загружаем данные. Сортируем от новых к старым (desc), чтобы правильно вычислить порядковый номер
+    const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+    if (!data) return;
 
-        // Присваиваем математический номер каждому акту
-        data.forEach((act, index) => {
-            act.seqNumber = data.length - index;
-        });
+    // 2. СЧИТАЕМ НОМЕР (№/11) ПЕРЕД ФИЛЬТРАЦИЕЙ
+    // Проходим по всему массиву данных из базы
+    data.forEach((act, index) => {
+        // Порядковый номер = (Всего записей) - (Текущий индекс)
+        act.seqNumber = data.length - index;
+        act.displayId = `${act.seqNumber}/11`; // Формат как на ваших скриншотах
+    });
 
-        const term = document.getElementById('actSearch').value.toLowerCase();
-        const statusFilter = document.getElementById('statusFilter').value;
+    const term = document.getElementById('actSearch').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
 
-        // 1. Фильтрация
-        let filtered = data.filter(a => {
-            let isVisible = false;
-            if (currentUser.role === 'Начальник отдела') isVisible = (a.created_by_dept === currentUser.department);
-            else if (currentUser.role === 'Начальник управления') isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-            else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ'))) {
-                if (a.target_shop === currentUser.department) isVisible = a.is_fully_signed === true; 
-            } 
-            else if (currentUser.role === 'Назначенное лицо') isVisible = (a.assigned_to === currentUser.id);
-            else isVisible = true;
+    // 3. Логика видимости (Фильтрация под конкретного пользователя)
+    const filtered = data.filter(a => {
+        let isVisible = false;
+        
+        if (currentUser.role === 'Начальник отдела') {
+            isVisible = (a.created_by_dept === currentUser.department);
+        } 
+        else if (currentUser.role === 'Начальник управления') {
+            isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+        }
+        else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ'))) {
+            // Начальник цеха и назначенные лица цеха видят только полностью подписанные акты их цеха
+            isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
+        } 
+        else if (currentUser.role === 'Назначенное лицо') {
+            // Назначенный исполнитель (например, из ПБ/ОТ) видит только то, что назначено ему лично
+            isVisible = (a.assigned_to === currentUser.id);
+        } 
+        else { isVisible = true; }
 
-            const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-            
-            let matchesStatus = true;
-            if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
-            else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
-            else if(statusFilter === 'remediated') matchesStatus = a.is_remediated;
+        const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+        let matchesStatus = true;
+        if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
+        else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
+        else if(statusFilter === 'remediated') matchesStatus = a.is_remediated;
 
-            return isVisible && matchesSearch && matchesStatus;
-        });
+        return isVisible && matchesSearch && matchesStatus;
+    });
 
-        // 2. Сортировка по выбранной колонке
-        filtered.sort((a, b) => {
-            let valA = a[sortColumn];
-            let valB = b[sortColumn];
-            
-            if (valA < valB) return sortDescending ? 1 : -1;
-            if (valA > valB) return sortDescending ? -1 : 1;
-            return 0;
-        });
+    // 4. Отрисовка списка (Адаптация под мобильное приложение)
+    document.getElementById('actsTable').innerHTML = filtered.map(a => {
+        let statusBadge = '';
+        if (a.is_fully_signed) statusBadge = '<span class="badge" style="background:#198754; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">ПОДПИСАНО</span>';
+        else if (a.is_remediated) statusBadge = '<span class="badge" style="background:#0dcaf0; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТЧЕТ</span>';
+        else if (a.is_dept_approved) statusBadge = '<span class="badge" style="background:#0d6efd; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">УПРАВЛЕНИЕ</span>';
+        else statusBadge = '<span class="badge" style="background:#ffc107; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТДЕЛ</span>';
 
-        // 3. Отрисовка
-        document.getElementById('actsTable').innerHTML = filtered.map(a => {
-            let statusBadge = '';
-            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done" style="background: #198754; color: white; padding: 5px 10px; border-radius: 5px;">ПОДПИСАНО</span>';
-            else if (a.is_remediated) statusBadge = '<span class="badge bg-remediated" style="background: #0dcaf0; color: black; padding: 5px 10px; border-radius: 5px;">ОТЧЕТ</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign" style="background: #0d6efd; color: white; padding: 5px 10px; border-radius: 5px;">УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge bg-wait" style="background: #ffc107; color: black; padding: 5px 10px; border-radius: 5px;">ОТДЕЛ</span>';
+        const photoUrls = JSON.parse(a.image_urls || '[]');
+        const photoUrl = photoUrls[0] || '';
 
-            const photoUrl = JSON.parse(a.image_urls || '[]')[0] || '';
-
-            return `
-            <tr onclick='openAct(${JSON.stringify(a)})' style="cursor: pointer;">
-                <td><b>${a.seqNumber}</b></td>
-                <td>${new Date(a.created_at).toLocaleDateString()}</td>
-                <td><b>${a.target_shop || '—'}</b></td>
-                <td><img src="${photoUrl}" style="height:45px; width:60px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'"></td>
-                <td style="font-size:12px;">${(a.violation_desc || "").substring(0,60)}...</td>
-                <td align="center">${statusBadge}</td>
-            </tr>`;
-        }).join('');
-    }
+        return `
+        <tr onclick='openAct(${JSON.stringify(a)})' style="cursor:pointer; border-bottom:1px solid #eee;">
+            <td style="padding:10px 5px; min-width:80px;">
+                <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
+                <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
+            </td>
+            <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
+            <td>
+                <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
+                     onerror="this.src='https://via.placeholder.com/50x40?text=Нет'">
+            </td>
+            <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,35)}...</td>
+            <td align="center">${statusBadge}</td>
+        </tr>`;
+    }).join('');
+}
 
     // --- ОТКРЫТИЕ АКТА И ОТЧЕТЫ ---
     async function openAct(act) {
@@ -533,6 +541,7 @@
 </script>
 </body>
 </html>
+
 
 
 
