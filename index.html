@@ -109,18 +109,20 @@
         </div>
 
         <div class="table-wrapper">
-            <table class="acts-table">
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        <th>Цех / Отдел</th>
-                        <th>Фото</th>
-                        <th>Описание</th>
-                        <th>Статус</th>
-                    </tr>
-                </thead>
-                <tbody id="actsTable"></tbody>
-            </table>
+            <table class="table table-hover">
+    <thead class="table-dark">
+        <tr>
+            <th onclick="toggleSort('seqNumber')" style="cursor:pointer;" title="Нажмите для сортировки">№ ↕</th>
+            <th onclick="toggleSort('created_at')" style="cursor:pointer;" title="Нажмите для сортировки">Дата ↕</th>
+            <th>Цех / Отдел</th>
+            <th>Фото</th>
+            <th>Описание</th>
+            <th>Статус</th>
+        </tr>
+    </thead>
+    <tbody id="actsTable">
+        </tbody>
+</table>
         </div>
     </div>
 </div>
@@ -201,7 +203,22 @@
     let currentUser = null;
     let allUsers = []; 
 
+    // Переменные для логики сортировки
+    let sortColumn = 'created_at';
+    let sortDescending = true; // true = от новых к старым (или от бОльшего к меньшему)
+
     document.addEventListener('DOMContentLoaded', checkSession);
+
+    // Функция переключения сортировки
+    window.toggleSort = function(col) {
+        if (sortColumn === col) {
+            sortDescending = !sortDescending; // Меняем направление, если кликнули по той же колонке
+        } else {
+            sortColumn = col;
+            sortDescending = true; // Сбрасываем на убывание при выборе новой колонки
+        }
+        loadActs();
+    };
 
     // --- АВТОРИЗАЦИЯ ---
     async function signIn() {
@@ -210,10 +227,7 @@
         const login = loginInput.value.trim();
         const pass = passInput.value;
 
-        if (!login || !pass) {
-            alert("Введите логин и пароль");
-            return;
-        }
+        if (!login || !pass) { alert("Введите логин и пароль"); return; }
 
         const { error } = await _supabase.auth.signInWithPassword({ 
             email: login.includes('@') ? login : login + "@ssk.local", 
@@ -257,16 +271,10 @@
 
     // --- ЗАГРУЗКА СПИСКА АКТОВ ---
     async function loadActs() {
-        // Загружаем все акты, сортируем от новых к старым
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (!data) return;
 
-        // --- ЛОГИКА НУМЕРАЦИИ (1, 2, 3...) ---
-        // Так как массив отсортирован по убыванию даты (index 0 - самый новый),
-        // То номер рассчитываем так: Всего актов - индекс текущего.
-        // Пример: Всего 3 акта.
-        // Индекс 0 (новый) -> 3 - 0 = №3
-        // Индекс 2 (старый) -> 3 - 2 = №1
+        // Присваиваем математический номер каждому акту
         data.forEach((act, index) => {
             act.seqNumber = data.length - index;
         });
@@ -274,28 +282,16 @@
         const term = document.getElementById('actSearch').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
 
-        const filtered = data.filter(a => {
+        // 1. Фильтрация
+        let filtered = data.filter(a => {
             let isVisible = false;
-            
-            // ЛОГИКА ВИДИМОСТИ
-            if (currentUser.role === 'Начальник отдела') {
-                isVisible = (a.created_by_dept === currentUser.department);
-            } 
-            else if (currentUser.role === 'Начальник управления') {
-                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-            }
+            if (currentUser.role === 'Начальник отдела') isVisible = (a.created_by_dept === currentUser.department);
+            else if (currentUser.role === 'Начальник управления') isVisible = (a.is_dept_approved === true || a.is_remediated === true);
             else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ'))) {
-                // Видит только ПОДПИСАННЫЕ начальником управления
-                if (a.target_shop === currentUser.department) {
-                    isVisible = a.is_fully_signed === true; 
-                } else {
-                    isVisible = false;
-                }
+                if (a.target_shop === currentUser.department) isVisible = a.is_fully_signed === true; 
             } 
-            else if (currentUser.role === 'Назначенное лицо') {
-                 isVisible = (a.assigned_to === currentUser.id);
-            } 
-            else { isVisible = true; } 
+            else if (currentUser.role === 'Назначенное лицо') isVisible = (a.assigned_to === currentUser.id);
+            else isVisible = true;
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
             
@@ -307,60 +303,61 @@
             return isVisible && matchesSearch && matchesStatus;
         });
 
+        // 2. Сортировка по выбранной колонке
+        filtered.sort((a, b) => {
+            let valA = a[sortColumn];
+            let valB = b[sortColumn];
+            
+            if (valA < valB) return sortDescending ? 1 : -1;
+            if (valA > valB) return sortDescending ? -1 : 1;
+            return 0;
+        });
+
+        // 3. Отрисовка
         document.getElementById('actsTable').innerHTML = filtered.map(a => {
             let statusBadge = '';
-            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
-            else if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ ПОЛУЧЕН</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
+            if (a.is_fully_signed) statusBadge = '<span class="badge bg-done" style="background: #198754; color: white; padding: 5px 10px; border-radius: 5px;">ПОДПИСАНО</span>';
+            else if (a.is_remediated) statusBadge = '<span class="badge bg-remediated" style="background: #0dcaf0; color: black; padding: 5px 10px; border-radius: 5px;">ОТЧЕТ</span>';
+            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign" style="background: #0d6efd; color: white; padding: 5px 10px; border-radius: 5px;">УПРАВЛЕНИЕ</span>';
+            else statusBadge = '<span class="badge bg-wait" style="background: #ffc107; color: black; padding: 5px 10px; border-radius: 5px;">ОТДЕЛ</span>';
 
             const photoUrl = JSON.parse(a.image_urls || '[]')[0] || '';
 
             return `
-            <tr onclick='openAct(${JSON.stringify(a)})'>
+            <tr onclick='openAct(${JSON.stringify(a)})' style="cursor: pointer;">
+                <td><b>${a.seqNumber}</b></td>
                 <td>${new Date(a.created_at).toLocaleDateString()}</td>
                 <td><b>${a.target_shop || '—'}</b></td>
-                <td><img src="${photoUrl}" class="act-thumb" onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'"></td>
+                <td><img src="${photoUrl}" style="height:45px; width:60px; object-fit:cover; border-radius:4px;" onerror="this.src='https://via.placeholder.com/60x45?text=No+Img'"></td>
                 <td style="font-size:12px;">${(a.violation_desc || "").substring(0,60)}...</td>
                 <td align="center">${statusBadge}</td>
             </tr>`;
         }).join('');
     }
 
-    // --- ОТКРЫТИЕ АКТА (ГЕНЕРАЦИЯ ДОКУМЕНТА) ---
+    // --- ОТКРЫТИЕ АКТА И ОТЧЕТЫ ---
     async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
         
-        // 1. Подготовка данных
         const d = new Date(act.created_at).toLocaleDateString();
-        
-        // ЛОГИКА НОМЕРА: Цифра (по порядку) + всегда /11
         const simpleNum = act.seqNumber || 1;
         const fullNumber = `${simpleNum}/11`;
 
         const deptName = act.created_by_dept || "Отдел пожарной безопасности";
         const targetShop = act.target_shop || "Цех";
         
-        // ЛОГИКА ТЕКСТА КОНТРОЛЯ
         let controlType = "промышленной безопасности, охраны труда и окружающей среды";
-        if (deptName.includes("ПБ") || deptName.toLowerCase().includes("пожар")) {
-            controlType = "пожарной безопасности";
-        } else if (deptName.includes("ОТ") || deptName.toLowerCase().includes("охраны труда")) {
-            controlType = "охраны труда";
-        }
+        if (deptName.includes("ПБ") || deptName.toLowerCase().includes("пожар")) controlType = "пожарной безопасности";
+        else if (deptName.includes("ОТ") || deptName.toLowerCase().includes("охраны труда")) controlType = "охраны труда";
 
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
-        
         let law = act.violation_article || 'ППР РФ';
-        if (law.includes("ППР РФ") && !law.includes("1479")) {
-            law += " утв. Постановлением Правительства Российской Федерации от 16 сентября 2020 г. №1479";
-        }
+        if (law.includes("ППР РФ") && !law.includes("1479")) law += " утв. Постановлением Правительства РФ от 16 сентября 2020 г. №1479";
 
         const action = act.action_required || 'Устранить нарушение';
         const deadline = act.deadline || '—';
         const responsible = act.responsible_person || 'Начальник цеха';
 
-        // ГЕНЕРАЦИЯ ШТАМПОВ
         const deptStamp = act.is_dept_approved 
             ? `<div style="border: 2px solid #28a745; color: #28a745; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">СОГЛАСОВАНО<br><span style="font-size:10px">ЭЛЕКТРОННО</span></div>` 
             : `<span style="color:#ccc;">(ожидает согласования)</span>`;
@@ -369,24 +366,16 @@
             ? `<div style="border: 2px solid #0056b3; color: #0056b3; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">ПОДПИСАНО<br><span style="font-size:10px">Начальник УПБ, ОТ и ОС<br>Саруханов Г.М.</span></div>`
             : `<span style="color:#ccc;">(на подписи)</span>`;
 
-        // 2. Генерация HTML
         const contentHTML = `
             <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2; padding: 20px; position: relative;">
-                
                 <div onclick="closeAct()" style="position: absolute; top: -10px; right: -10px; cursor: pointer; font-size: 30px; font-weight: bold; color: #aaa; padding: 10px;">&times;</div>
 
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; font-size:14px;">
-                    <div style="width:45%;">
-                        <div style="border:1px solid #ccc; padding:5px;">${deptName}</div>
-                    </div>
-                    <div style="width:45%; text-align:right;">
-                        <div style="border:1px solid #ccc; padding:5px;">Руководителям подразделений<br>№ 310</div>
-                    </div>
+                    <div style="width:45%;"><div style="border:1px solid #ccc; padding:5px;">${deptName}</div></div>
+                    <div style="width:45%; text-align:right;"><div style="border:1px solid #ccc; padding:5px;">Руководителям подразделений<br>№ 310</div></div>
                 </div>
 
-                <div style="text-align:center; margin-bottom:15px;">
-                    <h2 style="margin:0; font-size:18px; font-weight:bold;">ПРЕДПИСАНИЕ</h2>
-                </div>
+                <div style="text-align:center; margin-bottom:15px;"><h2 style="margin:0; font-size:18px; font-weight:bold;">ПРЕДПИСАНИЕ</h2></div>
 
                 <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:14px; border-bottom:1px solid #000; padding-bottom:5px;">
                     <div>${d} <span style="font-size:10px; color:#666;">дата</span></div>
@@ -410,10 +399,7 @@
                     <tbody>
                         <tr>
                             <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">1</td>
-                            <td style="border:1px solid black; padding:5px; vertical-align:top;">
-                                ${violation}<br><br>
-                                <b>Ответственный:</b> ${responsible}
-                            </td>
+                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${violation}<br><br><b>Ответственный:</b> ${responsible}</td>
                             <td style="border:1px solid black; padding:5px; vertical-align:top;">${law}</td>
                             <td style="border:1px solid black; padding:5px; vertical-align:top;">${action}</td>
                             <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">${deadline}</td>
@@ -422,16 +408,14 @@
                 </table>
 
                 <div style="margin-top:20px; margin-bottom:20px;">
-                     <div style="margin-bottom: 10px;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b></div>
+                    <div style="margin-bottom: 10px;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b></div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                         <div>(А.Б. Носов)</div>
-                         <div>${adminStamp}</div>
+                         <div>(А.Б. Носов)</div><div>${adminStamp}</div>
                     </div>
                     
                     <div style="margin-top: 20px; margin-bottom: 10px;"><b>Согласовано (Нач. отдела):</b></div>
                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                         <div>${deptName}</div>
-                         <div>${deptStamp}</div>
+                         <div>${deptName}</div><div>${deptStamp}</div>
                     </div>
                 </div>
                 
@@ -443,9 +427,7 @@
                 </div>
 
                 <div style="margin-top:20px; font-size:12px;">
-                    Отдел пожарной безопасности<br>
-                    А.В. Камардин<br>
-                    Тел. 8 994 021 73 13
+                    Отдел пожарной безопасности<br>А.В. Камардин<br>Тел. 8 994 021 73 13
                 </div>
 
                 <div style="margin-top:20px; border-bottom: 2px solid black; font-weight:bold;">Фотофиксация нарушения:</div>
@@ -458,34 +440,44 @@
         `;
 
         const container = document.getElementById('printableArea');
-        if (container) {
-            container.innerHTML = contentHTML;
-        } else {
-            alert('Ошибка отображения: отсутствует id="printableArea"');
-            return;
-        }
+        if (container) container.innerHTML = contentHTML;
 
-        // 3. Добавление фото (УВЕЛИЧЕННЫЕ)
+        // Фото акта
         const photos = JSON.parse(act.image_urls || "[]");
         document.getElementById('photoContainer').innerHTML = photos.length > 0 
             ? photos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="cursor:zoom-in; width:100%; max-width:400px; margin:5px 0; border:1px solid #ccc; display:block; border-radius:4px;">`).join('')
             : "Нет фото";
 
-        // 4. Отчеты
+        // РЕНДЕР ОТЧЕТОВ С ФОТО И ФИО
         const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
         if (reports && reports.length > 0) {
-            document.getElementById('remediationReports').innerHTML = `<div style="background:#f9f9f9; padding:10px; border:1px solid #eee;"><b>📝 Отчеты об устранении:</b>` + 
-                reports.map(r => `<p style="font-size:12px; margin:5px 0;"><b>${r.profiles?.username}:</b> ${r.description}</p>`).join('') + `</div>`;
+            document.getElementById('remediationReports').innerHTML = `<div style="background:#f4f6f8; padding:15px; border:1px solid #ddd; border-radius:8px; margin-top:25px;">
+                <h4 style="margin:0 0 15px 0; border-bottom:2px solid #ccc; padding-bottom:5px; font-family: sans-serif;">📝 Отчеты об устранении</h4>` + 
+                reports.map(r => {
+                    const rPhoto = r.photo_url || r.image_url;
+                    const photoHtml = rPhoto ? `<img src="${rPhoto}" onclick="window.open('${rPhoto}', '_blank')" style="cursor:zoom-in; width:120px; height:120px; object-fit:cover; border-radius:6px; margin-top:10px; border:1px solid #bbb; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display:block;">` : '';
+                    const dateStr = new Date(r.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+                    
+                    return `
+                    <div style="margin-bottom:15px; background:white; padding:15px; border:1px solid #eee; border-radius:6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-family: sans-serif;">
+                        <div style="font-size:13px; color:#555; margin-bottom:8px; display:flex; justify-content:space-between;">
+                            <span><b>👤 ${r.profiles?.username || 'Неизвестный исполнитель'}</b></span>
+                            <span style="color:#888;">🕒 ${dateStr}</span>
+                        </div>
+                        <div style="font-size:15px; color:#000;">
+                            ${r.description || '<i>Без комментария</i>'}
+                        </div>
+                        ${photoHtml}
+                    </div>`;
+                }).join('') + `</div>`;
         }
 
-        // 5. Кнопки
         renderActionButtons(act);
     }
 
     function renderActionButtons(act) {
         const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
-        
         let html = "";
         
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
@@ -505,18 +497,9 @@
 
     function showAssignUI(actId) {
         const assignDiv = document.createElement('div');
-        assignDiv.style.marginTop = "15px";
-        assignDiv.style.padding = "10px";
-        assignDiv.style.background = "#eee";
-        assignDiv.innerHTML = `
-            <select id="tempUserSelect" style="padding:5px;">
-                <option value="">-- Выберите исполнителя --</option>
-                ${allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
-            </select>
-            <button id="tempAssignBtn" style="padding:5px;">ОК</button>
-        `;
+        assignDiv.style.marginTop = "15px"; assignDiv.style.padding = "10px"; assignDiv.style.background = "#eee";
+        assignDiv.innerHTML = `<select id="tempUserSelect" style="padding:5px;"><option value="">-- Выберите исполнителя --</option>${allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}</select> <button id="tempAssignBtn" style="padding:5px;">ОК</button>`;
         document.getElementById('actionButtons').appendChild(assignDiv);
-        
         document.getElementById('tempAssignBtn').onclick = () => saveAssignment(actId, document.getElementById('tempUserSelect').value);
     }
 
@@ -527,32 +510,15 @@
         else { alert("Исполнитель назначен!"); closeAct(); loadActs(); }
     }
 
-    async function approveDept(id) {
-        if(confirm("Согласовать акт?")) {
-            await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id);
-            closeAct(); loadActs();
-        }
-    }
-
-    async function signFully(id) {
-        if(confirm("Подписать акт окончательно? После этого его увидит цех.")) {
-            await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Носов А.Б.' }).eq('id', id);
-            closeAct(); loadActs();
-        }
-    }
-    
-    async function rejectAct(id) {
-        if(confirm("Удалить этот акт?")) {
-             await _supabase.from('acts').delete().eq('id', id);
-             closeAct(); loadActs();
-        }
-    }
-
+    async function approveDept(id) { if(confirm("Согласовать акт?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
+    async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Носов А.Б.' }).eq('id', id); closeAct(); loadActs(); } }
+    async function rejectAct(id) { if(confirm("Удалить этот акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     async function signOut() { await _supabase.auth.signOut(); location.reload(); }
 </script>
 </body>
 </html>
+
 
 
 
