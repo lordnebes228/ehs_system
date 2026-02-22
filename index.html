@@ -410,7 +410,7 @@
                 <div style="margin-top:20px; margin-bottom:20px;">
                     <div style="margin-bottom: 10px;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b></div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                         <div>(А.Б. Носов)</div><div>${adminStamp}</div>
+                         <div>(Г. М. Саруханов)</div><div>${adminStamp}</div>
                     </div>
                     
                     <div style="margin-top: 20px; margin-bottom: 10px;"><b>Согласовано (Нач. отдела):</b></div>
@@ -511,13 +511,14 @@
     }
 
     async function approveDept(id) { if(confirm("Согласовать акт?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
-    async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Носов А.Б.' }).eq('id', id); closeAct(); loadActs(); } }
+    async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
     async function rejectAct(id) { if(confirm("Удалить этот акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     async function signOut() { await _supabase.auth.signOut(); location.reload(); }
 </script>
 </body>
 </html>
+
 
 
 
