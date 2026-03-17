@@ -91,20 +91,38 @@
 </div>
 
 <script>
-    const supabaseUrl = 'ВАШ_URL';
-    const supabaseKey = 'ВАШ_KEY';
-    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    // 1. Используем другое имя переменной, чтобы не было конфликта (Uncaught SyntaxError)
+    const _supabaseUrl = 'https://znlizfcqmxgrnhimzgul.supabase.co'; // Твой URL
+    const _supabaseKey = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj'; // Твой ключ
+    const _db = supabase.createClient(_supabaseUrl, _supabaseKey);
 
-    // ПОЛУЧАЕМ ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ И ЕГО ЦЕХ
-    // Предполагается, что данные профиля сохранены в localStorage при входе
-    const userProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
-    const myDept = userProfile.department || "Не определен";
+    // 2. Пытаемся достать профиль. 
+    // ВАЖНО: Проверь, что при логине ты делаешь localStorage.setItem('userProfile', JSON.stringify(profile))
+    const rawData = localStorage.getItem('userProfile');
+    const userProfile = rawData ? JSON.parse(rawData) : {};
+    
+    // Берем департамент и сразу чистим его от лишних пробелов
+    const myDept = (userProfile.department || "").trim();
 
-    document.getElementById('shop_name').value = myDept;
+    // Сразу выводим в консоль для отладки (нажми F12 на сайте, чтобы увидеть)
+    console.log("Загруженный департамент из профиля:", myDept);
+
+    // Подставляем в поле на экране
+    if (myDept) {
+        document.getElementById('shop_name').value = myDept;
+    } else {
+        document.getElementById('shop_name').value = "ОШИБКА: Цех не найден в профиле";
+        document.getElementById('shop_name').style.color = "red";
+    }
 
     async function saveExtinguisher() {
+        if (!myDept) {
+            alert("Невозможно сохранить: ваше подразделение не определено!");
+            return;
+        }
+
         const payload = {
-            shop_name: myDept, // Используем автоматически определенный цех
+            shop_name: myDept, 
             serial_number: document.getElementById('serial_number').value,
             type: document.getElementById('ext_type').value,
             location: document.getElementById('location').value,
@@ -113,36 +131,47 @@
             status: 'Годен'
         };
 
-        const { error } = await supabase.from('fire_extinguishers').insert([payload]);
-        if (error) alert('Ошибка: ' + error.message);
-        else { alert('Запись добавлена!'); loadTable(); }
+        const { error } = await _db.from('fire_extinguishers').insert([payload]);
+        if (error) {
+            alert('Ошибка БД: ' + error.message);
+        } else { 
+            alert('Данные по цеху ' + myDept + ' сохранены!'); 
+            loadTable(); 
+        }
     }
 
     async function loadTable() {
-        // ФИЛЬТРУЕМ ТАБЛИЦУ ТОЛЬКО ПО СВОЕМУ ЦЕХУ
-        const { data } = await supabase
+        if (!myDept) return;
+
+        const { data, error } = await _db
             .from('fire_extinguishers')
             .select('*')
-            .eq('shop_name', myDept) // Начальник видит только своё
+            .eq('shop_name', myDept) 
             .order('next_check_date', { ascending: true });
+
+        if (error) {
+            console.error("Ошибка загрузки таблицы:", error);
+            return;
+        }
 
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         const today = new Date();
 
         data.forEach(item => {
-            const isExpired = new Date(item.next_check_date) < today;
+            const isExpired = item.next_check_date ? new Date(item.next_check_date) < today : false;
             tbody.innerHTML += `
                 <tr>
-                    <td><b>${item.type}</b> (№${item.serial_number})</td>
-                    <td>${item.location}</td>
-                    <td class="${isExpired ? 'expired' : ''}">${item.next_check_date}</td>
-                    <td>${item.status}</td>
+                    <td><b>${item.type}</b> (№${item.serial_number || '—'})</td>
+                    <td>${item.location || '—'}</td>
+                    <td class="${isExpired ? 'expired' : ''}">${item.next_check_date || '—'}</td>
+                    <td>${item.status || '—'}</td>
                 </tr>
             `;
         });
     }
 
+    // Запускаем загрузку таблицы при открытии страницы
     loadTable();
 </script>
 </body>
