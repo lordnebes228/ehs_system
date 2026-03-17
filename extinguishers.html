@@ -5,69 +5,84 @@
     <title>Конструктор учета огнетушителей</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
-        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #1b5e20; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 0; }
+        /* Шапка как в админке */
+        .header-nav { background: #333; padding: 12px 20px; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .back-btn { background: #555; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; text-decoration: none; font-size: 14px; transition: 0.3s; }
+        .back-btn:hover { background: #777; }
+        
+        .container { max-width: 1000px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #333; margin-top: 0; border-bottom: 2px solid #e65100; padding-bottom: 10px; }
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-weight: 600; color: #555; font-size: 14px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        input:disabled { background: #f9f9f9; cursor: not-allowed; color: #888; }
+        
+        .save-btn { grid-column: span 2; padding: 15px; background: #2e7d32; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        .save-btn:hover { background: #1b5e20; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 30px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background: #f8f9fa; }
-        .expired { color: red; font-weight: bold; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: #666; font-size: 13px; text-transform: uppercase; }
+        .expired { color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🧯 Добавить огнетушитель (для начальников)</h2>
-    <p><a href="index.html">← Вернуться к актам</a></p>
+<div class="header-nav">
+    <a href="index.html" class="back-btn">← Вернуться к списку актов</a>
+</div>
 
-    <div id="addForm">
-        <div class="form-group">
-            <label>Подразделение (Цех):</label>
-            <select id="shop_name">
-                </select>
+<div class="container">
+    <h2>🧯 Учет огнетушителей: Конструктор</h2>
+
+    <div class="form-grid">
+        <div class="form-group" style="grid-column: span 2;">
+            <label>Ваше подразделение (определено автоматически):</label>
+            <input type="text" id="shop_name" disabled>
         </div>
+        
         <div class="form-group">
-            <label>Инвентарный / Заводской номер:</label>
-            <input type="text" id="serial_number" placeholder="Напр. SN-5544">
+            <label>Инвентарный номер:</label>
+            <input type="text" id="serial_number" placeholder="Введите номер">
         </div>
+        
         <div class="form-group">
-            <label>Тип огнетушителя:</label>
+            <label>Тип:</label>
             <select id="ext_type">
                 <option value="ОП-4">ОП-4 (Порошковый)</option>
                 <option value="ОУ-2">ОУ-2 (Углекислотный)</option>
                 <option value="ОУ-5">ОУ-5 (Углекислотный)</option>
-                <option value="ОП-8">ОП-8 (Порошковый)</option>
             </select>
         </div>
-        <div class="form-group">
+        
+        <div class="form-group" style="grid-column: span 2;">
             <label>Место установки:</label>
-            <input type="text" id="location" placeholder="Напр. Склад готовой продукции">
+            <input type="text" id="location" placeholder="Где находится огнетушитель?">
         </div>
-        <div style="display: flex; gap: 10px;">
-            <div class="form-group" style="flex: 1;">
-                <label>Дата последней проверки:</label>
-                <input type="date" id="last_check">
-            </div>
-            <div class="form-group" style="flex: 1;">
-                <label>Срок следующей проверки:</label>
-                <input type="date" id="next_check">
-            </div>
+        
+        <div class="form-group">
+            <label>Дата проверки:</label>
+            <input type="date" id="last_check">
         </div>
-        <button onclick="saveExtinguisher()">✅ Сохранить в базу</button>
+        
+        <div class="form-group">
+            <label>Следующая проверка:</label>
+            <input type="date" id="next_check">
+        </div>
+
+        <button class="save-btn" onclick="saveExtinguisher()">💾 СОХРАНИТЬ ДАННЫЕ</button>
     </div>
 
-    <hr>
-    <h3>Текущий список по вашему цеху</h3>
+    <h3>История записей по цеху</h3>
     <table id="extTable">
         <thead>
             <tr>
-                <th>Цех</th>
-                <th>Тип/Номер</th>
-                <th>Место</th>
-                <th>Срок до</th>
+                <th>Тип / Номер</th>
+                <th>Место установки</th>
+                <th>Срок проверки</th>
                 <th>Статус</th>
             </tr>
         </thead>
@@ -76,27 +91,20 @@
 </div>
 
 <script>
-    // Инициализация Supabase (замените на ваши ключи)
     const supabaseUrl = 'ВАШ_URL';
     const supabaseKey = 'ВАШ_KEY';
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-    // 1. Загрузка списка цехов
-    async function loadShops() {
-        const { data } = await supabase.from('departments').select('name').order('name');
-        const select = document.getElementById('shop_name');
-        data.forEach(shop => {
-            let opt = document.createElement('option');
-            opt.value = shop.name;
-            opt.innerHTML = shop.name;
-            select.appendChild(opt);
-        });
-    }
+    // ПОЛУЧАЕМ ТЕКУЩЕГО ПОЛЬЗОВАТЕЛЯ И ЕГО ЦЕХ
+    // Предполагается, что данные профиля сохранены в localStorage при входе
+    const userProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+    const myDept = userProfile.department || "Не определен";
 
-    // 2. Сохранение данных
+    document.getElementById('shop_name').value = myDept;
+
     async function saveExtinguisher() {
         const payload = {
-            shop_name: document.getElementById('shop_name').value,
+            shop_name: myDept, // Используем автоматически определенный цех
             serial_number: document.getElementById('serial_number').value,
             type: document.getElementById('ext_type').value,
             location: document.getElementById('location').value,
@@ -106,29 +114,27 @@
         };
 
         const { error } = await supabase.from('fire_extinguishers').insert([payload]);
-
-        if (error) {
-            alert('Ошибка: ' + error.message);
-        } else {
-            alert('Данные успешно добавлены!');
-            location.reload(); // Обновляем список
-        }
+        if (error) alert('Ошибка: ' + error.message);
+        else { alert('Запись добавлена!'); loadTable(); }
     }
 
-    // 3. Отображение списка
     async function loadTable() {
-        const { data } = await supabase.from('fire_extinguishers').select('*').order('created_at', { ascending: false });
+        // ФИЛЬТРУЕМ ТАБЛИЦУ ТОЛЬКО ПО СВОЕМУ ЦЕХУ
+        const { data } = await supabase
+            .from('fire_extinguishers')
+            .select('*')
+            .eq('shop_name', myDept) // Начальник видит только своё
+            .order('next_check_date', { ascending: true });
+
         const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
         const today = new Date();
 
         data.forEach(item => {
-            const nextCheck = new Date(item.next_check_date);
-            const isExpired = nextCheck < today;
-            
+            const isExpired = new Date(item.next_check_date) < today;
             tbody.innerHTML += `
                 <tr>
-                    <td>${item.shop_name}</td>
-                    <td>${item.type} (№${item.serial_number})</td>
+                    <td><b>${item.type}</b> (№${item.serial_number})</td>
                     <td>${item.location}</td>
                     <td class="${isExpired ? 'expired' : ''}">${item.next_check_date}</td>
                     <td>${item.status}</td>
@@ -137,7 +143,6 @@
         });
     }
 
-    loadShops();
     loadTable();
 </script>
 </body>
