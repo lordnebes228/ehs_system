@@ -213,37 +213,48 @@
 
     document.addEventListener('DOMContentLoaded', checkSession);
 
-    window.toggleSort = function(col) {
-        if (sortColumn === col) { sortDescending = !sortDescending; } 
-        else { sortColumn = col; sortDescending = true; }
-        loadActs();
-    };
-
-    // --- НОВЫЙ БЛОК: МОДУЛЬ ОГНЕТУШИТЕЛЕЙ ---
+    // --- ИСПРАВЛЕННЫЙ БЛОК: МОДУЛЬ ОГНЕТУШИТЕЛЕЙ ---
     
     async function openExtinguisherModule() {
         const module = document.getElementById('extMobileModule');
         if (!module) return;
+        
+        // 1. Пытаемся восстановить профиль, если он потерян после обновления страницы
+        if (!currentUser) {
+            const saved = localStorage.getItem('userProfile');
+            if (saved) currentUser = JSON.parse(saved);
+        }
+
+        if (!currentUser) {
+            alert("Ошибка: Профиль пользователя не найден. Перезайдите в систему.");
+            return;
+        }
+
         module.style.display = 'block';
         
-        if (currentUser) {
-            // Автоматически подставляем цех из профиля (для отображения)
-            const autoDeptElement = document.getElementById('currentAutoDept');
-            if (autoDeptElement) autoDeptElement.innerText = currentUser.department || "Не указан";
+        // Очищаем название цеха от лишних пробелов
+        const userDept = (currentUser.department || "").trim();
+        const autoDeptElement = document.getElementById('currentAutoDept');
+        if (autoDeptElement) autoDeptElement.innerText = userDept || "Не указан";
+        
+        // Логика доступа
+        const isInspector = currentUser.role === 'Инспектор' || 
+                            currentUser.role === 'Начальник управления' || 
+                            (userDept && (userDept.includes('ПБ') || userDept.includes('ОТ')));
+        
+        if (isInspector) {
+            document.getElementById('inspectorOnlyBlock').style.display = 'block';
+            document.getElementById('bossOnlyBlock').style.display = 'none';
+            await fillShopSelect(); 
+        } else {
+            document.getElementById('inspectorOnlyBlock').style.display = 'none';
+            document.getElementById('bossOnlyBlock').style.display = 'block';
             
-            // Логика доступа: Инспектор/УПБ видят выбор, Начальники - только свой цех
-            const isInspector = currentUser.role === 'Инспектор' || 
-                                currentUser.role === 'Начальник управления' || 
-                                (currentUser.department && (currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ')));
-            
-            if (isInspector) {
-                document.getElementById('inspectorOnlyBlock').style.display = 'block';
-                document.getElementById('bossOnlyBlock').style.display = 'none';
-                await fillShopSelect(); 
+            // Запускаем загрузку данных с очищенным именем цеха
+            if (userDept) {
+                loadExtData(userDept);
             } else {
-                document.getElementById('inspectorOnlyBlock').style.display = 'none';
-                document.getElementById('bossOnlyBlock').style.display = 'block';
-                loadExtData(currentUser.department);
+                document.getElementById('extListContainer').innerHTML = "<div style='text-align:center; padding:20px; color:red;'>Цех не указан в вашем профиле</div>";
             }
         }
     }
@@ -251,7 +262,8 @@
     async function fillShopSelect() {
         const { data } = await _supabase.from('extinguishers').select('department');
         if (data) {
-            const shops = [...new Set(data.map(item => item.department))].sort();
+            // Убираем дубликаты и пустые значения
+            const shops = [...new Set(data.map(item => (item.department || "").trim()))].filter(s => s !== "").sort();
             const select = document.getElementById('mobileShopSelect');
             if (select) {
                 select.innerHTML = '<option value="">-- Выберите цех --</option>' + 
@@ -263,16 +275,29 @@
     async function loadExtData(shopName) {
         if (!shopName) return;
         const container = document.getElementById('extListContainer');
-        container.innerHTML = "<div style='text-align:center; padding:20px;'>Загрузка...</div>";
+        container.innerHTML = "<div style='text-align:center; padding:20px;'>🔍 Ищем огнетушители для: " + shopName + "...</div>";
+
+        // Ключевое исправление: используем .trim() для поиска
+        const cleanName = shopName.trim();
 
         const { data, error } = await _supabase
             .from('extinguishers')
             .select('*')
-            .eq('department', shopName)
+            .eq('department', cleanName)
             .order('next_check', { ascending: true });
 
-        if (error || !data || data.length === 0) {
-            container.innerHTML = "<div style='text-align:center; color:#666; padding:20px;'>Огнетушители не найдены</div>";
+        if (error) {
+            console.error("Supabase Error:", error);
+            container.innerHTML = "<div style='text-align:center; color:red; padding:20px;'>Ошибка базы данных</div>";
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            container.innerHTML = `
+                <div style='text-align:center; color:#666; padding:20px; background:#fff; border-radius:10px;'>
+                    Огнетушители в подразделении <b>"${cleanName}"</b> не найдены.<br>
+                    <small style="color:#999; font-size:10px;">Проверьте точность названия в БД</small>
+                </div>`;
             return;
         }
 
@@ -283,20 +308,20 @@
             const bg = isExpired ? "#fee2e2" : "#dcfce7";
 
             return `
-                <div style="background:white; padding:15px; border-radius:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border:1px solid #eee; margin-bottom:10px;">
+                <div style="background:white; padding:15px; border-radius:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border:1px solid #eee; margin-bottom:10px; border-left: 4px solid ${color};">
                     <div style="display:flex; justify-content:space-between; align-items:start;">
                         <div>
-                            <div style="font-weight:bold; color:#333;">№ ${ext.inventory_number || 'Б/Н'}</div>
-                            <div style="font-size:12px; color:#666;">${ext.type}</div>
+                            <div style="font-weight:bold; color:#333; font-size:15px;">№ ${ext.inventory_number || 'Б/Н'}</div>
+                            <div style="font-size:12px; color:#666; margin-top:2px;">${ext.type || 'Переносной'}</div>
                         </div>
-                        <div style="background:${bg}; color:${color}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:bold;">
+                        <div style="background:${bg}; color:${color}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:bold; border: 1px solid ${color}33;">
                             ${isExpired ? 'ПРОСРОЧЕН' : 'НОРМА'}
                         </div>
                     </div>
-                    <div style="margin-top:8px; font-size:13px; color:#444;">📍 ${ext.location}</div>
-                    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #eee; display:flex; justify-content:space-between; font-size:12px;">
-                        <span>Срок проверки:</span>
-                        <b style="color:${color}">${nextDate.toLocaleDateString()}</b>
+                    <div style="margin-top:8px; font-size:13px; color:#444;">📍 ${ext.location || 'Место не указано'}</div>
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #eee; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:11px; color:#999;">Срок проверки:</span>
+                        <b style="color:${color}; font-size:13px;">${nextDate.toLocaleDateString()}</b>
                     </div>
                 </div>`;
         }).join('');
@@ -306,7 +331,7 @@
         document.getElementById('extMobileModule').style.display = 'none';
     }
 
-    // --- ВАШИ ОРИГИНАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ---
+    // --- СТАНДАРТНЫЕ ФУНКЦИИ (Login, Session, LoadActs) ---
 
     async function signIn() {
         const loginInput = document.getElementById('userLogin');
@@ -341,16 +366,15 @@
         if (!profile || !profile.can_view_acts) {
             alert("Доступ к веб-версии ограничен.");
             await _supabase.auth.signOut();
-            location.reload();
             return;
         }
 
         localStorage.setItem('userProfile', JSON.stringify(profile));
         currentUser = profile;
+        
         document.getElementById('loginForm').style.display='none';
         document.getElementById('mainContent').style.display='block';
         
-        // Показываем навигацию (кнопку ПБ) всем авторизованным пользователям
         const nav = document.getElementById('extinguisher-nav');
         if (nav) nav.style.display = 'block';
 
@@ -362,11 +386,9 @@
             if (adminBtn) adminBtn.style.display = 'flex';
         }
         
-        const { data: users } = await _supabase.from('profiles').select('id, username').eq('role', 'Назначенное лицо');
-        allUsers = users || [];
-
         loadActs();
     }
+
 
     async function loadActs() {
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
