@@ -131,7 +131,7 @@
             status: 'Годен'
         };
 
-        const { error } = await _db.from('fire_extinguishers').insert([payload]);
+        const { error } = await _db.from('extinguishers').insert([payload]);
         if (error) {
             alert('Ошибка БД: ' + error.message);
         } else { 
@@ -144,7 +144,7 @@
         if (!myDept) return;
 
         const { data, error } = await _db
-            .from('fire_extinguishers')
+            .from('extinguishers')
             .select('*')
             .eq('shop_name', myDept) 
             .order('next_check_date', { ascending: true });
