@@ -236,13 +236,14 @@
     }
 
     // Проверка сессии и отображение интерфейса
+   // Проверка сессии и отображение интерфейса
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         
         if (!session) { 
             document.getElementById('loginForm').style.display='block'; 
             document.getElementById('mainContent').style.display='none';
-            // Скрываем навигацию, если она есть
+            // Скрываем навигацию при отсутствии сессии
             const nav = document.getElementById('main-nav');
             if (nav) nav.style.display = 'none';
             return; 
@@ -264,9 +265,18 @@
         document.getElementById('loginForm').style.display='none';
         document.getElementById('mainContent').style.display='block';
         
-        // ПОКАЗЫВАЕМ НАВИГАЦИЮ ПОСЛЕ ВХОДА
+        // --- ИСПРАВЛЕННЫЙ БЛОК НАВИГАЦИИ ---
         const nav = document.getElementById('main-nav');
-        if (nav) nav.style.display = 'flex';
+        if (nav) {
+            // Проверяем роль: показываем ТОЛЬКО начальникам цехов и отделов
+            if (profile.role === 'Начальник цеха' || profile.role === 'Начальник отдела') {
+                nav.style.display = 'flex';
+            } else {
+                // Скрываем для Начальников управления и Назначенных лиц
+                nav.style.display = 'none';
+            }
+        }
+        // ----------------------------------
 
         document.getElementById('welcomeText').innerText = profile.username;
         document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
