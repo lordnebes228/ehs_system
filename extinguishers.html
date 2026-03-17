@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Конструктор учета огнетушителей</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 12px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1b5e20; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; }
+        .expired { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🧯 Добавить огнетушитель (для начальников)</h2>
+    <p><a href="index.html">← Вернуться к актам</a></p>
+
+    <div id="addForm">
+        <div class="form-group">
+            <label>Подразделение (Цех):</label>
+            <select id="shop_name">
+                </select>
+        </div>
+        <div class="form-group">
+            <label>Инвентарный / Заводской номер:</label>
+            <input type="text" id="serial_number" placeholder="Напр. SN-5544">
+        </div>
+        <div class="form-group">
+            <label>Тип огнетушителя:</label>
+            <select id="ext_type">
+                <option value="ОП-4">ОП-4 (Порошковый)</option>
+                <option value="ОУ-2">ОУ-2 (Углекислотный)</option>
+                <option value="ОУ-5">ОУ-5 (Углекислотный)</option>
+                <option value="ОП-8">ОП-8 (Порошковый)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Место установки:</label>
+            <input type="text" id="location" placeholder="Напр. Склад готовой продукции">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+                <label>Дата последней проверки:</label>
+                <input type="date" id="last_check">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Срок следующей проверки:</label>
+                <input type="date" id="next_check">
+            </div>
+        </div>
+        <button onclick="saveExtinguisher()">✅ Сохранить в базу</button>
+    </div>
+
+    <hr>
+    <h3>Текущий список по вашему цеху</h3>
+    <table id="extTable">
+        <thead>
+            <tr>
+                <th>Цех</th>
+                <th>Тип/Номер</th>
+                <th>Место</th>
+                <th>Срок до</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    // Инициализация Supabase (замените на ваши ключи)
+    const supabaseUrl = 'ВАШ_URL';
+    const supabaseKey = 'ВАШ_KEY';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    // 1. Загрузка списка цехов
+    async function loadShops() {
+        const { data } = await supabase.from('departments').select('name').order('name');
+        const select = document.getElementById('shop_name');
+        data.forEach(shop => {
+            let opt = document.createElement('option');
+            opt.value = shop.name;
+            opt.innerHTML = shop.name;
+            select.appendChild(opt);
+        });
+    }
+
+    // 2. Сохранение данных
+    async function saveExtinguisher() {
+        const payload = {
+            shop_name: document.getElementById('shop_name').value,
+            serial_number: document.getElementById('serial_number').value,
+            type: document.getElementById('ext_type').value,
+            location: document.getElementById('location').value,
+            last_check_date: document.getElementById('last_check').value,
+            next_check_date: document.getElementById('next_check').value,
+            status: 'Годен'
+        };
+
+        const { error } = await supabase.from('fire_extinguishers').insert([payload]);
+
+        if (error) {
+            alert('Ошибка: ' + error.message);
+        } else {
+            alert('Данные успешно добавлены!');
+            location.reload(); // Обновляем список
+        }
+    }
+
+    // 3. Отображение списка
+    async function loadTable() {
+        const { data } = await supabase.from('fire_extinguishers').select('*').order('created_at', { ascending: false });
+        const tbody = document.getElementById('tableBody');
+        const today = new Date();
+
+        data.forEach(item => {
+            const nextCheck = new Date(item.next_check_date);
+            const isExpired = nextCheck < today;
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.shop_name}</td>
+                    <td>${item.type} (№${item.serial_number})</td>
+                    <td>${item.location}</td>
+                    <td class="${isExpired ? 'expired' : ''}">${item.next_check_date}</td>
+                    <td>${item.status}</td>
+                </tr>
+            `;
+        });
+    }
+
+    loadShops();
+    loadTable();
+</script>
+</body>
+</html>
