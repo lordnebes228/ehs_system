@@ -199,73 +199,90 @@
     </button>
 </div>
 <script>
-        const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
-        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    let currentUser = null;
+    let allUsers = []; 
+
+    let sortColumn = 'created_at';
+    let sortDescending = true; 
+
+    document.addEventListener('DOMContentLoaded', checkSession);
+
+    window.toggleSort = function(col) {
+        if (sortColumn === col) { sortDescending = !sortDescending; } 
+        else { sortColumn = col; sortDescending = true; }
+        loadActs();
+    };
+
+    // Функция входа
+    async function signIn() {
+        const loginInput = document.getElementById('userLogin');
+        const passInput = document.getElementById('userPass');
+        const login = loginInput.value.trim();
+        const pass = passInput.value;
+
+        if (!login || !pass) { alert("Введите логин и пароль"); return; }
+
+        const { error } = await _supabase.auth.signInWithPassword({ 
+            email: login.includes('@') ? login : login + "@ssk.local", 
+            password: pass 
+        });
+
+        if (error) alert("Ошибка: " + error.message);
+        else checkSession();
+    }
+
+    // Проверка сессии и отображение интерфейса
+    async function checkSession() {
+        const { data: { session } } = await _supabase.auth.getSession();
         
-        let currentUser = null;
-        let allUsers = []; 
-
-        let sortColumn = 'created_at';
-        let sortDescending = true; 
-
-        document.addEventListener('DOMContentLoaded', checkSession);
-
-        window.toggleSort = function(col) {
-            if (sortColumn === col) { sortDescending = !sortDescending; } 
-            else { sortColumn = col; sortDescending = true; }
-            loadActs();
-        };
-
-        async function signIn() {
-            const loginInput = document.getElementById('userLogin');
-            const passInput = document.getElementById('userPass');
-            const login = loginInput.value.trim();
-            const pass = passInput.value;
-
-            if (!login || !pass) { alert("Введите логин и пароль"); return; }
-
-            const { error } = await _supabase.auth.signInWithPassword({ 
-                email: login.includes('@') ? login : login + "@ssk.local", 
-                password: pass 
-            });
-
-            if (error) alert("Ошибка: " + error.message);
-            else checkSession();
+        if (!session) { 
+            document.getElementById('loginForm').style.display='block'; 
+            document.getElementById('mainContent').style.display='none';
+            // Скрываем навигацию, если она есть
+            const nav = document.getElementById('main-nav');
+            if (nav) nav.style.display = 'none';
+            return; 
+        }
+        
+        const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
+        if (!profile || !profile.can_view_acts) {
+            alert("Доступ к веб-версии ограничен.");
+            await _supabase.auth.signOut();
+            location.reload();
+            return;
         }
 
-        async function checkSession() {
-            const { data: { session } } = await _supabase.auth.getSession();
-            if (!session) { 
-                document.getElementById('loginForm').style.display='block'; 
-                document.getElementById('mainContent').style.display='none';
-                return; 
-            }
-            
-            const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-            
-            if (!profile || !profile.can_view_acts) {
-                alert("Доступ к веб-версии ограничен.");
-                await _supabase.auth.signOut();
-                location.reload();
-                return;
-            }
+        // СОХРАНЯЕМ ПРОФИЛЬ ДЛЯ СТРАНИЦЫ ОГНЕТУШИТЕЛЕЙ
+        localStorage.setItem('userProfile', JSON.stringify(profile));
 
-            currentUser = profile;
-            document.getElementById('loginForm').style.display='none';
-            document.getElementById('mainContent').style.display='block';
-            document.getElementById('welcomeText').innerText = profile.username;
-            document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
-            
-            if (profile.can_manage_users) document.getElementById('adminBtn').style.display = 'flex';
-            
-            const { data: users } = await _supabase.from('profiles').select('id, username').eq('role', 'Назначенное лицо');
-            allUsers = users || [];
+        currentUser = profile;
+        document.getElementById('loginForm').style.display='none';
+        document.getElementById('mainContent').style.display='block';
+        
+        // ПОКАЗЫВАЕМ НАВИГАЦИЮ ПОСЛЕ ВХОДА
+        const nav = document.getElementById('main-nav');
+        if (nav) nav.style.display = 'flex';
 
-            loadActs();
+        document.getElementById('welcomeText').innerText = profile.username;
+        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
+        
+        if (profile.can_manage_users) {
+            const adminBtn = document.getElementById('adminBtn');
+            if (adminBtn) adminBtn.style.display = 'flex';
         }
+        
+        const { data: users } = await _supabase.from('profiles').select('id, username').eq('role', 'Назначенное лицо');
+        allUsers = users || [];
 
-       async function loadActs() {
+        loadActs();
+    }
+
+    async function loadActs() {
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (!data) return;
 
@@ -303,31 +320,34 @@
             return isVisible && matchesSearch && matchesStatus;
         });
 
-        document.getElementById('actsTable').innerHTML = filtered.map(a => {
-            let statusBadge = '';
-            if (a.is_fully_signed) statusBadge = '<span class="badge" style="background:#198754; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">ПОДПИСАНО</span>';
-            else if (a.is_remediated) statusBadge = '<span class="badge" style="background:#0dcaf0; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТЧЕТ</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge" style="background:#0d6efd; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge" style="background:#ffc107; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТДЕЛ</span>';
+        const actsTable = document.getElementById('actsTable');
+        if (actsTable) {
+            actsTable.innerHTML = filtered.map(a => {
+                let statusBadge = '';
+                if (a.is_fully_signed) statusBadge = '<span class="badge" style="background:#198754; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">ПОДПИСАНО</span>';
+                else if (a.is_remediated) statusBadge = '<span class="badge" style="background:#0dcaf0; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТЧЕТ</span>';
+                else if (a.is_dept_approved) statusBadge = '<span class="badge" style="background:#0d6efd; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">УПРАВЛЕНИЕ</span>';
+                else statusBadge = '<span class="badge" style="background:#ffc107; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТДЕЛ</span>';
 
-            const photoUrls = JSON.parse(a.image_urls || '[]');
-            const photoUrl = photoUrls[0] || '';
+                const photoUrls = JSON.parse(a.image_urls || '[]');
+                const photoUrl = photoUrls[0] || '';
 
-            return `
-            <tr onclick='openAct(${JSON.stringify(a)})' style="cursor:pointer; border-bottom:1px solid #eee;">
-                <td style="padding:10px 5px; min-width:80px;">
-                    <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
-                    <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
-                </td>
-                <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
-                <td>
-                    <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
-                         onerror="this.src='https://via.placeholder.com/50x40?text=Нет'">
-                </td>
-                <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,35)}...</td>
-                <td align="center">${statusBadge}</td>
-            </tr>`;
-        }).join('');
+                return `
+                <tr onclick='openAct(${JSON.stringify(a)})' style="cursor:pointer; border-bottom:1px solid #eee;">
+                    <td style="padding:10px 5px; min-width:80px;">
+                        <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
+                        <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
+                    </td>
+                    <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
+                    <td>
+                        <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
+                             onerror="this.src='https://via.placeholder.com/50x40?text=Нет'">
+                    </td>
+                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,35)}...</td>
+                    <td align="center">${statusBadge}</td>
+                </tr>`;
+            }).join('');
+        }
     }
 
     async function openAct(act) {
@@ -509,7 +529,6 @@
             const assignedUser = allUsers.find(u => u.id === act.assigned_to);
             const nameText = assignedUser ? `<b style="color:#2b6cb0;">${assignedUser.username}</b>` : `<span style="color:#e53e3e;">не назначен</span>`;
             
-            // Отображение ФИО и телефона, если они сохранены
             const extraInfo = (act.worker_full_name || act.worker_phone) 
                 ? `<div style="margin-top:5px; font-size:12px; color:#555;">${act.worker_full_name || ''} ${act.worker_phone ? '📞 ' + act.worker_phone : ''}</div>` 
                 : '';
@@ -560,9 +579,15 @@
     async function approveDept(id) { if(confirm("Согласовать акт?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
     async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
     async function rejectAct(id) { if(confirm("Удалить этот акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
+    
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
-    </script>
+    
+    async function signOut() { 
+        await _supabase.auth.signOut(); 
+        localStorage.removeItem('userProfile'); // Очищаем память
+        location.reload(); 
+    }
+</script>
     </body>
     </html>
     
