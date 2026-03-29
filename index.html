@@ -124,12 +124,12 @@
             <table class="table table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th onclick="toggleSort('seqNumber')" style="cursor:pointer;" title="Нажмите для сортировки">№ ↕</th>
-                        <th onclick="toggleSort('created_at')" style="cursor:pointer;" title="Нажмите для сортировки">Дата ↕</th>
-                        <th>Цех / Отдел</th>
-                        <th>Фото</th>
-                        <th>Описание</th>
-                        <th>Статус</th>
+                        <th onclick="toggleSort('seqNumber')" style="cursor:pointer; background:var(--primary); color:white; padding:12px;" title="Нажмите для сортировки">№ ↕</th>
+                        <th onclick="toggleSort('created_at')" style="cursor:pointer; background:var(--primary); color:white; padding:12px;" title="Нажмите для сортировки">Дата ↕</th>
+                        <th style="background:var(--primary); color:white; padding:12px;">Цех / Отдел</th>
+                        <th style="background:var(--primary); color:white; padding:12px;">Фото</th>
+                        <th style="background:var(--primary); color:white; padding:12px;">Описание</th>
+                        <th style="background:var(--primary); color:white; padding:12px;">Статус</th>
                     </tr>
                 </thead>
                 <tbody id="actsTable"></tbody>
@@ -207,12 +207,12 @@
 <div id="workerManagerModal" class="modal">
     <div style="background: white; margin: 100px auto; padding: 25px; width: 90%; max-width: 400px; border-radius: 15px;">
         <h3 style="margin-top:0;">Данные исполнителей</h3>
-        <p style="font-size: 12px; color: #666;">Выберите сотрудника и заполните его данные один раз. Они будут автоматически подставляться при назначении.</p>
+        <p style="font-size: 12px; color: #666;">Выберите сотрудника и заполните его данные один раз.</p>
         <select id="wmSelect" onchange="fillWorkerManager()" style="width:100%; margin-bottom:10px;"></select>
         <input type="text" id="wmFullName" placeholder="ФИО (например, Иванов И.И.)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
         <input type="text" id="wmPhone" placeholder="Телефон" style="width:100%; margin-bottom:15px; box-sizing:border-box;">
         <div style="display:flex; justify-content:space-between;">
-            <button onclick="saveWorkerManager()" style="background:var(--success); color:white; padding:10px 15px;">Сохранить данные</button>
+            <button onclick="saveWorkerManager()" style="background:var(--success); color:white; padding:10px 15px;">Сохранить</button>
             <button onclick="document.getElementById('workerManagerModal').style.display='none'" style="background:#ccc; padding:10px 15px; color: black;">Закрыть</button>
         </div>
     </div>
@@ -234,12 +234,15 @@
     document.addEventListener('DOMContentLoaded', checkSession);
 
     window.toggleSort = function(col) {
-        if (sortColumn === col) { sortDescending = !sortDescending; } 
-        else { sortColumn = col; sortDescending = true; }
+        if (sortColumn === col) { 
+            sortDescending = !sortDescending; 
+        } else { 
+            sortColumn = col; 
+            sortDescending = true; 
+        }
         loadActs();
     };
 
-    // Функция входа
     async function signIn() {
         const loginInput = document.getElementById('userLogin');
         const passInput = document.getElementById('userPass');
@@ -257,7 +260,6 @@
         else checkSession();
     }
 
-    // Проверка сессии и отображение интерфейса
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
         
@@ -303,19 +305,24 @@
             if (adminBtn) adminBtn.style.display = 'flex';
         }
         
-        // ВНИМАНИЕ: Подтягиваем также full_name и phone
-        const { data: users } = await _supabase.from('profiles').select('id, username, full_name, phone').eq('role', 'Назначенное лицо');
+        // ДОБАВЛЕНА ЗАГРУЗКА department и role для фильтрации
+        const { data: users } = await _supabase.from('profiles').select('id, username, full_name, phone, department, role');
         allUsers = users || [];
 
         loadActs();
-        checkExtinguisherAlerts(); // Запускаем проверку уведомлений
+        setTimeout(checkExtinguisherAlerts, 1000); // Небольшая задержка, чтобы интерфейс успел прогрузиться
     }
 
-    // --- ЛОГИКА УПРАВЛЕНИЯ ИСПОЛНИТЕЛЯМИ ---
     window.openWorkerManager = function() {
+        // ФИЛЬТРАЦИЯ ИСПОЛНИТЕЛЕЙ ПО ЦЕХУ
+        let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
+        if (currentUser.role === 'Начальник цеха') {
+            allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
+        }
+
         const select = document.getElementById('wmSelect');
         select.innerHTML = '<option value="">-- Выберите сотрудника --</option>' + 
-                           allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+                           allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
         document.getElementById('wmFullName').value = '';
         document.getElementById('wmPhone').value = '';
         document.getElementById('workerManagerModal').style.display = 'block';
@@ -349,30 +356,29 @@
             alert('Ошибка при сохранении: ' + error.message);
         } else {
             alert('Данные успешно сохранены!');
-            // Обновляем данные в локальном массиве
             const user = allUsers.find(u => u.id === userId);
             if (user) { user.full_name = fName; user.phone = phone; }
             document.getElementById('workerManagerModal').style.display = 'none';
         }
     };
 
-    // --- ЛОГИКА УВЕДОМЛЕНИЙ ОБ ОГНЕТУШИТЕЛЯХ ---
+    // ИСПРАВЛЕНА ЛОГИКА ДАТ ДЛЯ УВЕДОМЛЕНИЙ
     async function checkExtinguisherAlerts() {
         if (!currentUser) return;
         
-        const isInspector = currentUser.role === 'Инспектор' || currentUser.role === 'Начальник управления' || currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ');
+        const isInspector = currentUser.role === 'Инспектор' || currentUser.role === 'Начальник управления' || (currentUser.department && (currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ')));
         
         let query = _supabase.from('extinguishers').select('next_check');
-        if (!isInspector) {
+        if (!isInspector && currentUser.department) {
             query = query.eq('department', currentUser.department);
         }
 
-        const { data } = await query;
-        if (!data || data.length === 0) return;
+        const { data, error } = await query;
+        if (error || !data || data.length === 0) return;
 
         const now = new Date();
         const twoMonthsLater = new Date();
-        twoMonthsLater.setMonth(now.getMonth() + 2); // Дата через 2 месяца
+        twoMonthsLater.setDate(now.getDate() + 60); // Ровно 60 дней вперед
 
         let alertCount = 0;
         data.forEach(ext => {
@@ -383,7 +389,7 @@
         });
 
         if (alertCount > 0) {
-            showNotificationToast(`⚠️ <b>Внимание!</b><br>Огнетушителей, требующих проверки в ближайшие 2 месяца: <b>${alertCount} шт.</b><br><small>Перейдите в Реестр для подробностей.</small>`);
+            showNotificationToast(`⚠️ <b>Внимание!</b><br>Огнетушителей, требующих проверки (или уже просроченных): <b>${alertCount} шт.</b><br><small>Перейдите в Реестр для подробностей.</small>`);
         }
     }
 
@@ -403,7 +409,6 @@
         area.appendChild(toast);
     }
 
-    // --- ЗАГРУЗКА АКТОВ ---
     async function loadActs() {
         const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (!data) return;
@@ -416,7 +421,7 @@
         const term = document.getElementById('actSearch').value.toLowerCase();
         const statusFilter = document.getElementById('statusFilter').value;
 
-        const filtered = data.filter(a => {
+        let filtered = data.filter(a => {
             let isVisible = false;
             
             if (currentUser.role === 'Начальник отдела') {
@@ -442,20 +447,32 @@
             return isVisible && matchesSearch && matchesStatus;
         });
 
+        // ДОБАВЛЕНА СОРТИРОВКА ДАННЫХ ПЕРЕД ОТРИСОВКОЙ
+        filtered.sort((a, b) => {
+            if (sortColumn === 'seqNumber') {
+                return sortDescending ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+            } else if (sortColumn === 'created_at') {
+                let dateA = new Date(a.created_at).getTime();
+                let dateB = new Date(b.created_at).getTime();
+                return sortDescending ? dateB - dateA : dateA - dateB;
+            }
+            return 0;
+        });
+
         const actsTable = document.getElementById('actsTable');
         if (actsTable) {
             actsTable.innerHTML = filtered.map(a => {
                 let statusBadge = '';
-                if (a.is_fully_signed) statusBadge = '<span class="badge" style="background:#198754; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">ПОДПИСАНО</span>';
-                else if (a.is_remediated) statusBadge = '<span class="badge" style="background:#0dcaf0; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТЧЕТ</span>';
-                else if (a.is_dept_approved) statusBadge = '<span class="badge" style="background:#0d6efd; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">УПРАВЛЕНИЕ</span>';
-                else statusBadge = '<span class="badge" style="background:#ffc107; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТДЕЛ</span>';
+                if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
+                else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
+                else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
+                else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
 
                 const photoUrls = JSON.parse(a.image_urls || '[]');
                 const photoUrl = photoUrls[0] || '';
 
                 return `
-                <tr onclick='openAct(${JSON.stringify(a)})' style="cursor:pointer; border-bottom:1px solid #eee;">
+                <tr onclick='openAct(${JSON.stringify(a)})' style="border-bottom:1px solid #eee;">
                     <td style="padding:10px 5px; min-width:80px;">
                         <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
                         <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
@@ -463,9 +480,9 @@
                     <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
                     <td>
                         <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
-                             onerror="this.src='https://via.placeholder.com/50x40?text=Нет'">
+                             onerror="this.style.display='none'">
                     </td>
-                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,35)}...</td>
+                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
                     <td align="center">${statusBadge}</td>
                 </tr>`;
             }).join('');
@@ -550,7 +567,7 @@
                 <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #ccc;">
                      <div style="font-size:12px; color: #555;">
                         <b>Статус получения (Цех):</b><br>
-                        ${act.is_fully_signed ? '<span style="color:green">Документ передан в системе ЭДО. Ожидает исполнения.</span>' : '<span style="color:orange">Документ в процессе оформления.</span>'}
+                        ${act.is_fully_signed ? '<span style="color:green">Документ передан в системе ЭДО. Ожидает исполнения.</span>' : '<span style="color:orange">Документ на стадии согласования инспектором. Цех еще не видит акт.</span>'}
                      </div>
                 </div>
                 <div style="margin-top:20px; font-size:12px;">
@@ -668,12 +685,18 @@
     }
         
     function showAssignUI(actId) {
+        // ФИЛЬТРАЦИЯ ИСПОЛНИТЕЛЕЙ ДЛЯ ВЫПАДАЮЩЕГО СПИСКА ВНУТРИ АКТА
+        let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
+        if (currentUser.role === 'Начальник цеха') {
+            allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
+        }
+
         const assignDiv = document.createElement('div');
         assignDiv.style.marginTop = "15px"; assignDiv.style.padding = "10px"; assignDiv.style.background = "#eee";
         assignDiv.innerHTML = `
             <select id="tempUserSelect" style="padding:5px; width:100%; margin-bottom:5px;" onchange="autoFillWorkerData()">
                 <option value="">-- Выберите исполнителя --</option>
-                ${allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
+                ${allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
             </select>
             <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
             <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
@@ -688,7 +711,6 @@
         );
     }
 
-    // Автоматическое заполнение полей при выборе исполнителя
     window.autoFillWorkerData = function() {
         const userId = document.getElementById('tempUserSelect').value;
         const user = allUsers.find(u => u.id === userId);
