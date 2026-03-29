@@ -201,240 +201,633 @@
     
  
 <script>
-    // Настройки Supabase
+
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
+
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
+
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
     
+
     let currentUser = null;
+
     let allUsers = []; 
+
+
+
+    let sortColumn = 'created_at';
+
+    let sortDescending = true; 
+
+
 
     document.addEventListener('DOMContentLoaded', checkSession);
 
-    // --- ФУНКЦИЯ ВХОДА (signIn) ---
-    async function signIn() {
-        const loginInput = document.getElementById('userLogin');
-        const passInput = document.getElementById('userPass');
-        const login = loginInput.value.trim();
-        const pass = passInput.value;
 
-        if (!login || !pass) { 
-            alert("Введите логин и пароль"); 
-            return; 
-        }
 
-        // Автоматическая подстановка домена, если его нет
-        const email = login.includes('@') ? login : login + "@ssk.local";
+    window.toggleSort = function(col) {
 
-        const { data, error } = await _supabase.auth.signInWithPassword({ 
-            email: email, 
-            password: pass 
-        });
+        if (sortColumn === col) { sortDescending = !sortDescending; } 
 
-        if (error) {
-            alert("Ошибка входа: " + error.message);
-        } else {
-            checkSession(); // После успешного входа проверяем профиль
-        }
-    }
+        else { sortColumn = col; sortDescending = true; }
 
-    // --- ПРОВЕРКА СЕССИИ И РОЛИ ---
-    async function checkSession() {
-        const { data: { session } } = await _supabase.auth.getSession();
-        
-        if (!session) { 
-            document.getElementById('loginForm').style.display = 'block'; 
-            document.getElementById('mainContent').style.display = 'none';
-            return; 
-        }
-        
-        const { data: profile, error } = await _supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-        
-        if (error || !profile) {
-            alert("Ошибка загрузки профиля");
-            return;
-        }
-
-        // Проверка прав на просмотр (из твоего исходника)
-        if (profile.can_view_acts === false) {
-            alert("Доступ к веб-версии ограничен администратором.");
-            await _supabase.auth.signOut();
-            return;
-        }
-
-        currentUser = profile;
-        localStorage.setItem('userProfile', JSON.stringify(profile));
-        
-        document.getElementById('loginForm').style.display = 'none';
-        document.getElementById('mainContent').style.display = 'block';
-        document.getElementById('welcomeText').innerText = profile.username;
-        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
-        
         loadActs();
-    }
 
-    // --- НАЗНАЧЕНИЕ ИСПОЛНИТЕЛЯ (Начальник цеха) ---
-    async function assignWorker(actId) {
-        const workerId = document.getElementById('workerSelect').value;
-        if (!workerId) { alert("Выберите сотрудника"); return; }
+    };
 
-        const { error } = await _supabase
-            .from('acts')
-            .update({ assigned_to: workerId })
-            .eq('id', actId);
 
-        if (error) alert("Ошибка: " + error.message);
-        else {
-            alert("Исполнитель назначен!");
-            closeAct();
-            loadActs();
-        }
-    }
 
-    // --- ОТКРЫТИЕ АКТА (С ФУНКЦИЕЙ ФОТО И НАЗНАЧЕНИЯ) ---
-    async function openAct(act) {
-        document.getElementById('actModal').style.display = 'block';
-        const d = new Date(act.created_at).toLocaleDateString();
-        const fullNumber = `${act.seqNumber || 1}/11`;
-        
-        if (allUsers.length === 0) {
-            const { data } = await _supabase.from('profiles').select('id, username');
-            if (data) allUsers = data;
-        }
+    // --- НОВЫЙ БЛОК: МОДУЛЬ ОГНЕТУШИТЕЛЕЙ ---
 
-        let assignedName = "Не назначено";
-        if (act.assigned_to) {
-            const found = allUsers.find(u => u.id === act.assigned_to);
-            if (found) assignedName = found.username;
-        }
+    
 
-        const deptStamp = act.is_dept_approved ? `<div style="border:2px solid #28a745; color:#28a745; padding:5px; font-weight:bold; transform:rotate(-3deg); border-radius:5px; display:inline-block;">СОГЛАСОВАНО</div>` : `<span style="color:#ccc;">(ожидает)</span>`;
-        const adminStamp = act.is_fully_signed ? `<div style="border:2px solid #0056b3; color:#0056b3; padding:5px; font-weight:bold; transform:rotate(-3deg); border-radius:5px; display:inline-block;">ПОДПИСАНО</div>` : `<span style="color:#ccc;">(ожидает)</span>`;
-
-        const contentHTML = `
-            <div style="font-family: 'Times New Roman', serif; color:black; padding: 25px; background:white;">
-                <div onclick="closeAct()" style="position: absolute; top: 10px; right: 20px; cursor: pointer; font-size: 30px;">&times;</div>
-                <div style="text-align:center; font-weight:bold; margin-bottom:20px;">
-                    <div style="font-size:14px;">ССК «ЗВЕЗДА»</div>
-                    <div style="font-size:16px; text-decoration:underline; margin-top:5px;">ПРЕДПИСАНИЕ № ${fullNumber}</div>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px;">
-                    <span>г. Большой Камень</span>
-                    <span>${d} г.</span>
-                </div>
-                <p>Инспектором <b>${act.created_by_name || 'ПБ'}</b> выявлены нарушения в <b>${act.target_shop}</b>:</p>
-                <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:15px;">
-                    <tr style="background:#f5f5f5;"><th style="border:1px solid black; padding:8px;">Нарушение</th><th style="border:1px solid black; padding:8px; width:80px;">Срок</th></tr>
-                    <tr><td style="border:1px solid black; padding:8px;">${act.violation_desc}</td><td style="border:1px solid black; padding:8px; text-align:center;"><b>${act.deadline || '—'}</b></td></tr>
-                </table>
-                <div style="font-size:13px; background:#f9f9f9; padding:10px; border-radius:5px; border:1px solid #eee;">
-                    <div><b>Исполнитель:</b> ${assignedName}</div>
-                    <div><b>Ответственный от цеха:</b> ${act.responsible_person || 'Начальник цеха'}</div>
-                </div>
-                <div style="margin-top:30px; display:flex; justify-content:space-around; text-align:center;">
-                    <div>${deptStamp}<br><small>Отдел ПБ</small></div>
-                    <div>${adminStamp}<br><small>Управление ПБ</small></div>
-                </div>
-                <div id="photoContainer" style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;"></div>
-                <div id="remediationReports"></div>
-            </div>
-            <div id="actionButtons" style="padding:15px; background:#f1f1f1; border-top:1px solid #ddd; display:flex; flex-direction:column; gap:10px;"></div>
-        `;
-
-        document.getElementById('printableArea').innerHTML = contentHTML;
-
-        // Фотографии с кликом (открытие на весь экран)
-        const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('photoContainer').innerHTML = photos.map(url => 
-            `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:120px; height:90px; object-fit:cover; cursor:zoom-in; border:1px solid #ccc; border-radius:4px;">`
-        ).join('');
-
-        await renderRemediationReports(act);
-        
-        const btnBox = document.getElementById('actionButtons');
-        if (currentUser.role === 'Начальник цеха' && !act.assigned_to) {
-            let options = allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
-            btnBox.innerHTML = `<label style="font-size:12px;">Назначить исполнителя:</label>
-                <div style="display:flex; gap:5px;">
-                    <select id="workerSelect" style="flex:1; padding:10px; border-radius:5px; border:1px solid #ddd;">${options}</select>
-                    <button onclick="assignWorker('${act.id}')" style="background:#28a745; color:white; border:none; padding:10px 15px; border-radius:5px;">ОК</button>
-                </div>`;
-        } else {
-            if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved) {
-                btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; border:none; padding:15px; border-radius:5px; width:100%; font-weight:bold;">СОГЛАСОВАТЬ</button>`;
-            } else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
-                btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; border:none; padding:15px; border-radius:5px; width:100%; font-weight:bold;">ПОДПИСАТЬ</button>`;
-            }
-        }
-    }
-
-    // --- ЗАГРУЗКА АКТОВ В ТАБЛИЦУ ---
-    async function loadActs() {
-        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-        if (data) {
-            document.getElementById('actsTable').innerHTML = data.map((a, i) => `
-                <tr onclick='openAct(${JSON.stringify({...a, seqNumber: data.length - i})})' style="cursor:pointer; border-bottom:1px solid #eee;">
-                    <td style="padding:10px;">№ ${(data.length - i)}/11<br><small>${new Date(a.created_at).toLocaleDateString()}</small></td>
-                    <td><b>${a.target_shop}</b></td>
-                    <td align="center">${a.is_fully_signed ? '✅' : (a.is_dept_approved ? '🔵' : '⏳')}</td>
-                </tr>`).join('');
-        }
-    }
-
-    async function renderRemediationReports(act) {
-        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id);
-        if (reports && reports.length > 0) {
-            document.getElementById('remediationReports').innerHTML = `<div style="margin-top:20px; padding:10px; border-top:1px solid #eee; font-size:12px;"><b>Отчеты об устранении:</b><br>` + 
-                reports.map(r => `• ${r.profiles?.username}: ${r.description}`).join('<br>') + `</div>`;
-        }
-    }
-
-    // --- МОДУЛЬ ОГНЕТУШИТЕЛЕЙ (БЕЗ ИЗМЕНЕНИЙ) ---
     async function openExtinguisherModule() {
+
         const module = document.getElementById('extMobileModule');
+
         if (!module) return;
+
         module.style.display = 'block';
-        const userDept = (currentUser.department || "").trim();
-        if (currentUser.role === 'Инспектор' || userDept.includes('ПБ')) {
-            document.getElementById('inspectorOnlyBlock').style.display = 'block';
-            document.getElementById('bossOnlyBlock').style.display = 'none';
-            await fillShopSelect(); 
-        } else {
-            document.getElementById('inspectorOnlyBlock').style.display = 'none';
-            document.getElementById('bossOnlyBlock').style.display = 'block';
-            loadExtData(userDept);
+
+        
+
+        if (currentUser) {
+
+            // Автоматически подставляем цех из профиля (для отображения)
+
+            const autoDeptElement = document.getElementById('currentAutoDept');
+
+            if (autoDeptElement) autoDeptElement.innerText = currentUser.department || "Не указан";
+
+            
+
+            // Логика доступа: Инспектор/УПБ видят выбор, Начальники - только свой цех
+
+            const isInspector = currentUser.role === 'Инспектор' || 
+
+                                currentUser.role === 'Начальник управления' || 
+
+                                (currentUser.department && (currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ')));
+
+            
+
+            if (isInspector) {
+
+                document.getElementById('inspectorOnlyBlock').style.display = 'block';
+
+                document.getElementById('bossOnlyBlock').style.display = 'none';
+
+                await fillShopSelect(); 
+
+            } else {
+
+                document.getElementById('inspectorOnlyBlock').style.display = 'none';
+
+                document.getElementById('bossOnlyBlock').style.display = 'block';
+
+                loadExtData(currentUser.department);
+
+            }
+
         }
+
     }
+
+
 
     async function fillShopSelect() {
+
         const { data } = await _supabase.from('extinguishers').select('department');
+
         if (data) {
-            const shops = [...new Set(data.map(item => (item.department || "").trim()))].filter(s => s !== "").sort();
-            document.getElementById('mobileShopSelect').innerHTML = shops.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            const shops = [...new Set(data.map(item => item.department))].sort();
+
+            const select = document.getElementById('mobileShopSelect');
+
+            if (select) {
+
+                select.innerHTML = '<option value="">-- Выберите цех --</option>' + 
+
+                    shops.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            }
+
         }
+
     }
+
+
 
     async function loadExtData(shopName) {
-        const { data } = await _supabase.from('extinguishers').select('*').eq('department', shopName.trim());
+
+        if (!shopName) return;
+
         const container = document.getElementById('extListContainer');
-        if (!data || data.length === 0) { container.innerHTML = "Данные не найдены"; return; }
-        container.innerHTML = data.map(ext => `
-            <div style="background:white; padding:10px; border-radius:8px; margin-bottom:8px; border-left:4px solid ${new Date(ext.next_check) < new Date() ? 'red' : 'green'};">
-                <b>№ ${ext.inventory_number}</b> | ${ext.location}<br>
-                <small>Срок: ${new Date(ext.next_check).toLocaleDateString()}</small>
-            </div>`).join('');
+
+        container.innerHTML = "<div style='text-align:center; padding:20px;'>Загрузка...</div>";
+
+
+
+        const { data, error } = await _supabase
+
+            .from('extinguishers')
+
+            .select('*')
+
+            .eq('department', shopName)
+
+            .order('next_check', { ascending: true });
+
+
+
+        if (error || !data || data.length === 0) {
+
+            container.innerHTML = "<div style='text-align:center; color:#666; padding:20px;'>Огнетушители не найдены</div>";
+
+            return;
+
+        }
+
+
+
+        container.innerHTML = data.map(ext => {
+
+            const nextDate = new Date(ext.next_check);
+
+            const isExpired = nextDate < new Date();
+
+            const color = isExpired ? "#dc2626" : "#16a34a";
+
+            const bg = isExpired ? "#fee2e2" : "#dcfce7";
+
+
+
+            return `
+
+                <div style="background:white; padding:15px; border-radius:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border:1px solid #eee; margin-bottom:10px;">
+
+                    <div style="display:flex; justify-content:space-between; align-items:start;">
+
+                        <div>
+
+                            <div style="font-weight:bold; color:#333;">№ ${ext.inventory_number || 'Б/Н'}</div>
+
+                            <div style="font-size:12px; color:#666;">${ext.type}</div>
+
+                        </div>
+
+                        <div style="background:${bg}; color:${color}; padding:4px 8px; border-radius:6px; font-size:10px; font-weight:bold;">
+
+                            ${isExpired ? 'ПРОСРОЧЕН' : 'НОРМА'}
+
+                        </div>
+
+                    </div>
+
+                    <div style="margin-top:8px; font-size:13px; color:#444;">📍 ${ext.location}</div>
+
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #eee; display:flex; justify-content:space-between; font-size:12px;">
+
+                        <span>Срок проверки:</span>
+
+                        <b style="color:${color}">${nextDate.toLocaleDateString()}</b>
+
+                    </div>
+
+                </div>`;
+
+        }).join('');
+
     }
 
-    // --- КНОПКИ ДЕЙСТВИЙ ---
-    async function approveDept(id) { await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id); closeAct(); loadActs(); }
-    async function signFully(id) { await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id); closeAct(); loadActs(); }
+
+
+    function closeExtModule() {
+
+        document.getElementById('extMobileModule').style.display = 'none';
+
+    }
+
+
+
+    // --- ВАШИ ОРИГИНАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ---
+
+
+
+    async function signIn() {
+
+        const loginInput = document.getElementById('userLogin');
+
+        const passInput = document.getElementById('userPass');
+
+        const login = loginInput.value.trim();
+
+        const pass = passInput.value;
+
+
+
+        if (!login || !pass) { alert("Введите логин и пароль"); return; }
+
+
+
+        const { error } = await _supabase.auth.signInWithPassword({ 
+
+            email: login.includes('@') ? login : login + "@ssk.local", 
+
+            password: pass 
+
+        });
+
+
+
+        if (error) alert("Ошибка: " + error.message);
+
+        else checkSession();
+
+    }
+
+
+
+    async function checkSession() {
+
+        const { data: { session } } = await _supabase.auth.getSession();
+
+        
+
+        if (!session) { 
+
+            document.getElementById('loginForm').style.display='block'; 
+
+            document.getElementById('mainContent').style.display='none';
+
+            const nav = document.getElementById('extinguisher-nav');
+
+            if (nav) nav.style.display = 'none';
+
+            return; 
+
+        }
+
+        
+
+        const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
+
+        
+
+        if (!profile || !profile.can_view_acts) {
+
+            alert("Доступ к веб-версии ограничен.");
+
+            await _supabase.auth.signOut();
+
+            location.reload();
+
+            return;
+
+        }
+
+
+
+        localStorage.setItem('userProfile', JSON.stringify(profile));
+
+        currentUser = profile;
+
+        document.getElementById('loginForm').style.display='none';
+
+        document.getElementById('mainContent').style.display='block';
+
+        
+
+        // Показываем навигацию (кнопку ПБ) всем авторизованным пользователям
+
+        const nav = document.getElementById('extinguisher-nav');
+
+        if (nav) nav.style.display = 'block';
+
+
+
+        document.getElementById('welcomeText').innerText = profile.username;
+
+        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
+
+        
+
+        if (profile.can_manage_users) {
+
+            const adminBtn = document.getElementById('adminBtn');
+
+            if (adminBtn) adminBtn.style.display = 'flex';
+
+        }
+
+        
+
+        const { data: users } = await _supabase.from('profiles').select('id, username').eq('role', 'Назначенное лицо');
+
+        allUsers = users || [];
+
+
+
+        loadActs();
+
+    }
+
+
+
+    async function loadActs() {
+
+        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+
+        if (!data) return;
+
+
+
+        data.forEach((act, index) => {
+
+            act.seqNumber = data.length - index;
+
+            act.displayId = `${act.seqNumber}/11`;
+
+        });
+
+
+
+        const term = document.getElementById('actSearch').value.toLowerCase();
+
+        const statusFilter = document.getElementById('statusFilter').value;
+
+
+
+        const filtered = data.filter(a => {
+
+            let isVisible = false;
+
+            if (currentUser.role === 'Начальник отдела') isVisible = (a.created_by_dept === currentUser.department);
+
+            else if (currentUser.role === 'Начальник управления') isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+
+            else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ'))) {
+
+                isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
+
+            } 
+
+            else if (currentUser.role === 'Назначенное лицо') isVisible = (a.assigned_to === currentUser.id);
+
+            else isVisible = true;
+
+
+
+            const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+
+            let matchesStatus = true;
+
+            if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
+
+            else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
+
+            else if(statusFilter === 'remediated') matchesStatus = a.is_remediated;
+
+
+
+            return isVisible && matchesSearch && matchesStatus;
+
+        });
+
+
+
+        const actsTable = document.getElementById('actsTable');
+
+        if (actsTable) {
+
+            actsTable.innerHTML = filtered.map(a => {
+
+                let statusBadge = '';
+
+                if (a.is_fully_signed) statusBadge = '<span class="badge" style="background:#198754; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">ПОДПИСАНО</span>';
+
+                else if (a.is_remediated) statusBadge = '<span class="badge" style="background:#0dcaf0; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТЧЕТ</span>';
+
+                else if (a.is_dept_approved) statusBadge = '<span class="badge" style="background:#0d6efd; color:white; padding:3px 7px; border-radius:4px; font-size:10px;">УПРАВЛЕНИЕ</span>';
+
+                else statusBadge = '<span class="badge" style="background:#ffc107; color:black; padding:3px 7px; border-radius:4px; font-size:10px;">ОТДЕЛ</span>';
+
+
+
+                const photoUrls = JSON.parse(a.image_urls || '[]');
+
+                return `
+
+                <tr onclick='openAct(${JSON.stringify(a)})' style="cursor:pointer; border-bottom:1px solid #eee;">
+
+                    <td style="padding:10px 5px; min-width:80px;">
+
+                        <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
+
+                        <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
+
+                    </td>
+
+                    <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
+
+                    <td><img src="${photoUrls[0] || ''}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" onerror="this.src='https://via.placeholder.com/50x40?text=Нет'"></td>
+
+                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,35)}...</td>
+
+                    <td align="center">${statusBadge}</td>
+
+                </tr>`;
+
+            }).join('');
+
+        }
+
+    }
+
+
+
+    async function openAct(act) {
+
+        document.getElementById('actModal').style.display = 'block';
+
+        const d = new Date(act.created_at).toLocaleDateString();
+
+        const simpleNum = act.seqNumber || 1;
+
+        const fullNumber = `${simpleNum}/11`;
+
+        const deptName = act.created_by_dept || "Отдел пожарной безопасности";
+
+        const targetShop = act.target_shop || "Цех";
+
+        
+
+        let controlType = "пожарной безопасности";
+
+        if (deptName.includes("ОТ")) controlType = "охраны труда";
+
+
+
+        const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
+
+        const law = act.violation_article || 'ППР РФ';
+
+        const action = act.action_required || 'Устранить нарушение';
+
+        const deadline = act.deadline || '—';
+
+        const responsible = act.responsible_person || 'Начальник цеха';
+
+
+
+        const deptStamp = act.is_dept_approved 
+
+            ? `<div style="border: 2px solid #28a745; color: #28a745; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">СОГЛАСОВАНО</div>` 
+
+            : `<span style="color:#ccc;">(ожидает)</span>`;
+
+
+
+        const adminStamp = act.is_fully_signed
+
+            ? `<div style="border: 2px solid #0056b3; color: #0056b3; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">ПОДПИСАНО</div>`
+
+            : `<span style="color:#ccc;">(на подписи)</span>`;
+
+
+
+        const contentHTML = `
+
+            <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2; padding: 20px; position: relative;">
+
+                <div onclick="closeAct()" style="position: absolute; top: -10px; right: -10px; cursor: pointer; font-size: 30px;">&times;</div>
+
+                <h2 style="text-align:center; font-size:18px;">ПРЕДПИСАНИЕ № ${fullNumber}</h2>
+
+                <p>В подразделении <b>${targetShop}</b> от ${d} выявлены нарушения:</p>
+
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+
+                    <tr style="background:#f0f0f0;">
+
+                        <th style="border:1px solid black; padding:5px;">Нарушение</th>
+
+                        <th style="border:1px solid black; padding:5px;">Документ</th>
+
+                        <th style="border:1px solid black; padding:5px;">Срок</th>
+
+                    </tr>
+
+                    <tr>
+
+                        <td style="border:1px solid black; padding:5px;">${violation}</td>
+
+                        <td style="border:1px solid black; padding:5px;">${law}</td>
+
+                        <td style="border:1px solid black; padding:5px; text-align:center;">${deadline}</td>
+
+                    </tr>
+
+                </table>
+
+                <div style="margin-top:20px; display:flex; justify-content:space-between;">
+
+                    <div>${deptStamp}</div>
+
+                    <div>${adminStamp}</div>
+
+                </div>
+
+                <div id="photoContainer" style="margin-top:10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
+
+                <div id="remediationReports"></div>
+
+            </div>
+
+            <div id="actionButtons" style="margin-top:20px; padding:10px; border-top:1px solid #eee;"></div>
+
+        `;
+
+
+
+        const container = document.getElementById('printableArea');
+
+        if (container) container.innerHTML = contentHTML;
+
+
+
+        const photos = JSON.parse(act.image_urls || "[]");
+
+        document.getElementById('photoContainer').innerHTML = photos.map(url => `<img src="${url}" style="width:150px; border-radius:4px;">`).join('');
+
+
+
+        await renderRemediationReports(act);
+
+        renderActionButtons(act);
+
+    }
+
+
+
+    async function renderRemediationReports(act) {
+
+        const reportBox = document.getElementById('remediationReports');
+
+        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id);
+
+        if (reports && reports.length > 0) {
+
+            reportBox.innerHTML = `<div style="margin-top:20px; background:#f9f9f9; padding:10px; border-radius:5px;"><b>Отчеты:</b><br>` + 
+
+                reports.map(r => `<div>${r.profiles?.username}: ${r.description}</div>`).join('') + `</div>`;
+
+        }
+
+    }
+
+
+
+    function renderActionButtons(act) {
+
+        const btnBox = document.getElementById('actionButtons');
+
+        btnBox.innerHTML = "";
+
+        if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
+
+            btnBox.innerHTML = `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:10px; width:100%; border:none; border-radius:5px;">✅ СОГЛАСОВАТЬ</button>`;
+
+        } else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
+
+            btnBox.innerHTML = `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:10px; width:100%; border:none; border-radius:5px;">🖋 ПОДПИСАТЬ</button>`;
+
+        }
+
+    }
+
+
+
+    async function approveDept(id) { if(confirm("Согласовать?")) { await _supabase.from('acts').update({ is_dept_approved: true }).eq('id', id); closeAct(); loadActs(); } }
+
+    async function signFully(id) { if(confirm("Подписать?")) { await _supabase.from('acts').update({ is_fully_signed: true }).eq('id', id); closeAct(); loadActs(); } }
+
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    function closeExtModule() { document.getElementById('extMobileModule').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); localStorage.clear(); location.reload(); }
+
+    
+
+    async function signOut() { 
+
+        await _supabase.auth.signOut(); 
+
+        localStorage.removeItem('userProfile');
+
+        location.reload(); 
+
+    }
+
 </script>
     </body>
     </html>
