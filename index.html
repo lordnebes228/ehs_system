@@ -409,9 +409,18 @@
         area.appendChild(toast);
     }
 
-  async function loadActs() {
-    const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-    if (!data) return;
+ async function loadActs() {
+    // 1. Проверяем наличие Supabase и currentUser
+    if (typeof _supabase === 'undefined') return;
+    
+    const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+    if (error || !data) return;
+
+    // 2. Если данных о пользователе ещё нет, выходим или ждем
+    if (!window.currentUser) {
+        console.warn("loadActs: Данные пользователя еще не загружены.");
+        return; 
+    }
 
     data.forEach((act, index) => {
         act.seqNumber = data.length - index;
@@ -422,16 +431,14 @@
     const statusFilter = (document.getElementById('statusFilter')?.value || 'all');
 
     let filtered = data.filter(a => {
-        // --- ЗАЩИТА: Если пользователь не вошел, скрываем всё ---
-        if (!currentUser) return false;
-
         let isVisible = false;
         
-        // --- ЗАЩИТА: Берем департамент и роль, даже если они пустые в базе ---
-        const userDept = currentUser.department || "";
-        const userRole = currentUser.role || "";
+        // Безопасно берем данные, даже если они null в базе
+        const userDept = window.currentUser.department || "";
+        const userRole = window.currentUser.role || "";
+        const userId = window.currentUser.id || "";
 
-        // Проверка подразделения (не ПБ и не ОТ)
+        // Тот самый "защищенный" includes
         const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
 
         if (userRole === 'Начальник отдела') {
@@ -444,11 +451,10 @@
             isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
         }
         else if (userRole === 'Назначенное лицо') {
-            isVisible = (a.assigned_to === currentUser.id) || 
+            isVisible = (a.assigned_to === userId) || 
                         (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
         }
         else {
-            // Администраторы и инспекторы видят всё по умолчанию
             isVisible = true; 
         }
 
@@ -461,6 +467,44 @@
 
         return isVisible && matchesSearch && matchesStatus;
     });
+
+    // --- СОРТИРОВКА И ОТРИСОВКА ---
+    // (Используем тот же код, что и раньше, он стабилен)
+    renderTable(filtered);
+}
+
+// Вспомогательная функция отрисовки, чтобы не загромождать loadActs
+function renderTable(filtered) {
+    const actsTable = document.getElementById('actsTable');
+    if (!actsTable) return;
+
+    actsTable.innerHTML = filtered.map(a => {
+        let statusBadge = '';
+        if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
+        else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
+        else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
+        else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
+
+        let photoUrls = [];
+        try { photoUrls = JSON.parse(a.image_urls || '[]'); } catch(e) { photoUrls = []; }
+        const photoUrl = photoUrls[0] || '';
+
+        return `
+            <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
+                <td style="padding:10px 5px; min-width:80px;">
+                    <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
+                    <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
+                </td>
+                <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
+                <td>
+                    <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
+                         onerror="this.style.display='none'">
+                </td>
+                <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
+                <td align="center">${statusBadge}</td>
+            </tr>`;
+    }).join('');
+}
 
     // --- СОРТИРОВКА ---
     filtered.sort((a, b) => {
