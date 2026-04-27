@@ -422,27 +422,38 @@
     const statusFilter = (document.getElementById('statusFilter')?.value || 'all');
 
     let filtered = data.filter(a => {
-        let isVisible = false;
-        const isWorker = !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ');
+        // --- ЗАЩИТА: Если пользователь не вошел, скрываем всё ---
+        if (!currentUser) return false;
 
-        if (currentUser.role === 'Начальник отдела') {
-            isVisible = (a.created_by_dept === currentUser.department);
+        let isVisible = false;
+        
+        // --- ЗАЩИТА: Берем департамент и роль, даже если они пустые в базе ---
+        const userDept = currentUser.department || "";
+        const userRole = currentUser.role || "";
+
+        // Проверка подразделения (не ПБ и не ОТ)
+        const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
+
+        if (userRole === 'Начальник отдела') {
+            isVisible = (a.created_by_dept === userDept);
         } 
-        else if (currentUser.role === 'Начальник управления') {
+        else if (userRole === 'Начальник управления') {
             isVisible = (a.is_dept_approved === true || a.is_remediated === true);
         }
-        else if (currentUser.role === 'Начальник цеха') {
-            isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
+        else if (userRole === 'Начальник цеха') {
+            isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
         }
-        else if (currentUser.role === 'Назначенное лицо') {
+        else if (userRole === 'Назначенное лицо') {
             isVisible = (a.assigned_to === currentUser.id) || 
-                        (isWorker && a.target_shop === currentUser.department && a.is_fully_signed === true);
+                        (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
         }
         else {
+            // Администраторы и инспекторы видят всё по умолчанию
             isVisible = true; 
         }
 
         const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+        
         let matchesStatus = true;
         if (statusFilter === 'signed') matchesStatus = a.is_fully_signed;
         else if (statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
@@ -450,6 +461,54 @@
 
         return isVisible && matchesSearch && matchesStatus;
     });
+
+    // --- СОРТИРОВКА ---
+    filtered.sort((a, b) => {
+        if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
+            return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+        } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
+            let dateA = new Date(a.created_at).getTime();
+            let dateB = new Date(b.created_at).getTime();
+            return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
+        }
+        return 0;
+    });
+
+    // --- ОТРИСОВКА В ТАБЛИЦУ ---
+    const actsTable = document.getElementById('actsTable');
+    if (actsTable) {
+        actsTable.innerHTML = filtered.map(a => {
+            let statusBadge = '';
+            if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
+            else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
+            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
+            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
+
+            let photoUrls = [];
+            try { 
+                photoUrls = JSON.parse(a.image_urls || '[]'); 
+            } catch(e) { 
+                photoUrls = []; 
+            }
+            const photoUrl = photoUrls[0] || '';
+
+            return `
+                <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
+                    <td style="padding:10px 5px; min-width:80px;">
+                        <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
+                        <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
+                    </td>
+                    <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
+                    <td>
+                        <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
+                             onerror="this.style.display='none'">
+                    </td>
+                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
+                    <td align="center">${statusBadge}</td>
+                </tr>`;
+        }).join('');
+    }
+}
 
     // --- СОРТИРОВКА (Теперь внутри функции) ---
     filtered.sort((a, b) => {
