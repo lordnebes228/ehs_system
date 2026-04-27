@@ -409,47 +409,62 @@
         area.appendChild(toast);
     }
 
-    async function loadActs() {
-        const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-        if (!data) return;
+   async function loadActs() {
+    const { data } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+    if (!data) return;
 
-        data.forEach((act, index) => {
-            act.seqNumber = data.length - index;
-            act.displayId = `${act.seqNumber}/11`;
-        });
+    data.forEach((act, index) => {
+        act.seqNumber = data.length - index;
+        act.displayId = `${act.seqNumber}/11`;
+    });
 
-        const term = document.getElementById('actSearch').value.toLowerCase();
-        const statusFilter = document.getElementById('statusFilter').value;
+    const term = (document.getElementById('actSearch')?.value || "").toLowerCase();
+    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
 
-        let filtered = data.filter(a => {
-            let isVisible = false;
-            
-            if (currentUser.role === 'Начальник отдела') {
-                isVisible = (a.created_by_dept === currentUser.department);
-            } 
-            else if (currentUser.role === 'Начальник управления') {
-                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-            }
-            else if (currentUser.role === 'Начальник цеха' || (currentUser.role === 'Назначенное лицо' && !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ'))) {
-                isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
-            } 
-            else if (currentUser.role === 'Назначенное лицо') {
-   
-    const isWorker = !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ');
-    isVisible = (a.assigned_to === currentUser.id) || (isWorker && a.target_shop === currentUser.department && a.is_fully_signed === true);
+    let filtered = data.filter(a => {
+        let isVisible = false;
+        
+        // Проверка подразделения (является ли пользователь рабочим цеха)
+        const isWorker = !currentUser.department.includes('ПБ') && !currentUser.department.includes('ОТ');
+
+        if (currentUser.role === 'Начальник отдела') {
+            isVisible = (a.created_by_dept === currentUser.department);
+        } 
+        else if (currentUser.role === 'Начальник управления') {
+            isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+        }
+        else if (currentUser.role === 'Начальник цеха') {
+            // Видит только акты своего цеха, которые уже полностью подписаны
+            isVisible = (a.target_shop === currentUser.department && a.is_fully_signed === true);
+        }
+        else if (currentUser.role === 'Назначенное лицо') {
+            // Видит либо то, что назначено ему лично, 
+            // либо (если он рабочий цеха) подписанные акты своего цеха
+            isVisible = (a.assigned_to === currentUser.id) || 
+                        (isWorker && a.target_shop === currentUser.department && a.is_fully_signed === true);
+        }
+        else {
+            // Инспекторы, админы и прочие по умолчанию видят всё
+            isVisible = true; 
+        }
+
+        const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+        
+        let matchesStatus = true;
+        if (statusFilter === 'signed') matchesStatus = a.is_fully_signed;
+        else if (statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
+        else if (statusFilter === 'remediated') matchesStatus = a.is_remediated;
+
+        return isVisible && matchesSearch && matchesStatus;
+    });
+
+    // Далее ваш код по отрисовке (например, renderActs(filtered))
+    if (typeof renderActs === 'function') {
+        renderActs(filtered);
+    } else {
+        console.log("Filtered acts:", filtered);
+    }
 }
-            } 
-            else { isVisible = true; }
-
-            const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-            let matchesStatus = true;
-            if(statusFilter === 'signed') matchesStatus = a.is_fully_signed;
-            else if(statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
-            else if(statusFilter === 'remediated') matchesStatus = a.is_remediated;
-
-            return isVisible && matchesSearch && matchesStatus;
-        });
-
         // ДОБАВЛЕНА СОРТИРОВКА ДАННЫХ ПЕРЕД ОТРИСОВКОЙ
         filtered.sort((a, b) => {
             if (sortColumn === 'seqNumber') {
