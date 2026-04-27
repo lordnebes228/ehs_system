@@ -532,40 +532,68 @@
     }
 
     async function renderRemediationReports(act) {
-        const reportBox = document.getElementById('remediationReports');
-        if (!reportBox) return;
+    const reportBox = document.getElementById('remediationReports');
+    if (!reportBox) return;
 
-        let actHtml = '';
-        if (act.is_remediated || act.corrective_action || act.remediation_image_urls) {
-            let actPhotos = Array.isArray(act.remediation_image_urls) ? act.remediation_image_urls : [];
-            if (!Array.isArray(actPhotos) && typeof act.remediation_image_urls === 'string') {
-                try { actPhotos = JSON.parse(act.remediation_image_urls); } catch(e) { actPhotos = [act.remediation_image_urls]; }
+    let actHtml = '';
+    // Проверяем наличие любых данных об устранении
+    if (act.is_remediated || act.corrective_action || act.action_required || act.remediation_image_urls) {
+        let actPhotos = [];
+        if (Array.isArray(act.remediation_image_urls)) {
+            actPhotos = act.remediation_image_urls;
+        } else if (typeof act.remediation_image_urls === 'string') {
+            try { 
+                actPhotos = JSON.parse(act.remediation_image_urls); 
+            } catch(e) { 
+                actPhotos = act.remediation_image_urls ? [act.remediation_image_urls] : []; 
             }
-            
-            actHtml = `
-                <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
-                    <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
-                    ${act.corrective_action ? `<div style="font-weight:bold; margin-bottom:10px;">${act.corrective_action}</div>` : ''}
-                    <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        ${actPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer;">`).join('')}
-                    </div>
-                    ${act.worker_full_name ? `<div style="margin-top:10px; font-size:12px; color:#666;">Ответственный: ${act.worker_full_name}</div>` : ''}
-                </div>`;
         }
 
-        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
-        let tableHtml = '';
-        if (reports && reports.length > 0) {
-            tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;"><h4 style="margin:0 0 10px 0;">📋 ДОП. ОТЧЕТЫ</h4>`;
-            tableHtml += reports.map(r => `
-                <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
-                    <div style="font-size:12px; color:#718096;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
-                    <div>${r.description || ''}</div>
-                </div>`).join('') + `</div>`;
-        }
-        reportBox.innerHTML = actHtml + tableHtml;
+        // Выбираем текст: сначала action_required, потом corrective_action
+        const statusText = act.action_required || act.corrective_action || "Нарушение устранено (текст не указан)";
+
+        actHtml = `
+            <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
+                <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
+                
+                <div style="font-weight:bold; margin-bottom:10px; font-size: 15px; color: #2d3748;">
+                    ${statusText}
+                </div>
+
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    ${actPhotos.map(url => `
+                        <img src="${url}" onclick="window.open('${url}', '_blank')" 
+                             style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer; border: 1px solid #e2e8f0;">
+                    `).join('')}
+                </div>
+                
+                ${act.worker_full_name ? `<div style="margin-top:10px; font-size:12px; color:#666;">Ответственный: ${act.worker_full_name}</div>` : ''}
+            </div>`;
     }
 
+    // Загрузка дополнительных отчетов из связанной таблицы
+    const { data: reports } = await _supabase
+        .from('remediation_reports')
+        .select('*, profiles!worker_id(username)')
+        .eq('act_id', act.id)
+        .order('created_at', { ascending: false });
+
+    let tableHtml = '';
+    if (reports && reports.length > 0) {
+        tableHtml = `
+            <div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;">
+                <h4 style="margin:0 0 10px 0;">📋 ДОП. ОТЧЕТЫ</h4>
+                ${reports.map(r => `
+                    <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+                        <div style="font-size:12px; color:#718096;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
+                        <div>${r.description || ''}</div>
+                    </div>
+                `).join('')}
+            </div>`;
+    }
+
+    reportBox.innerHTML = actHtml + tableHtml;
+}
     function renderActionButtons(act) {
         const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
