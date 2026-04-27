@@ -597,65 +597,73 @@ return `
         renderActionButtons(act);
     }
 
-    async function renderRemediationReports(act) {
-        const reportBox = document.getElementById('remediationReports');
-        const { data: reports } = await _supabase
-            .from('remediation_reports')
-            .select('*, profiles!worker_id(username)')
-            .eq('act_id', act.id)
-            .order('created_at', { ascending: false });
+  async function renderRemediationReports(act) {
+    const reportBox = document.getElementById('remediationReports');
+    if (!reportBox) return;
 
-        let html = '';
-
-        if (reports && reports.length > 0) {
-            html = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:25px;">
-                    <h4 style="margin:0 0 15px 0; color: #22543d; border-bottom:1px solid #c6f6d5; padding-bottom:5px;">✅ ОТЧЕТЫ ОБ УСТРАНЕНИИ</h4>`;
-            
-            html += reports.map(r => {
-                let rPhotos = [];
-                try {
-                    const parsed = JSON.parse(r.photo_url || r.image_url || "[]");
-                    rPhotos = Array.isArray(parsed) ? parsed : [parsed];
-                } catch (e) {
-                    if (r.photo_url || r.image_url) rPhotos = [r.photo_url || r.image_url];
-                }
-                return `
-                    <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
-                        <div style="font-size:12px; color:#718096; margin-bottom:5px;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
-                        <div style="font-size:14px; color:#2d3748;">${r.description || 'Нарушение устранено'}</div>
-                        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap: wrap;">
-                            ${rPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:120px; height:90px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid #ddd;">`).join('')}
-                        </div>
-                    </div>`;
-            }).join('') + `</div>`;
-        } 
-        else if (act.is_remediated) {
-            const rawPhotos = act.image_urls || "[]";
-            let actPhotos = [];
-            try {
-                const parsed = JSON.parse(rawPhotos);
-                actPhotos = Array.isArray(parsed) ? parsed : [parsed];
-            } catch (e) {
-                if (rawPhotos.startsWith('http')) actPhotos = [rawPhotos];
-            }
-
-            html = `
-                <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
-                    <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИЗ ПРИЛОЖЕНИЯ:</h4>
-                    <div style="font-size:15px; margin-bottom:10px; font-weight: bold; color: #2d3748;">
-                        ${act.corrective_action || "Исполнитель подтвердил устранение"}
-                    </div>
-                    <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        ${actPhotos.map(url => `
-                            <img src="${url}" onclick="window.open('${url}', '_blank')" 
-                                 style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        `).join('')}
-                    </div>
-                </div>`;
+    // 1. Сначала проверяем отчеты из основной таблицы (куда пишет мобилка)
+    let actHtml = '';
+    if (act.is_remediated || act.corrective_action) {
+        // Проверяем все возможные поля для фото отчета
+        const rawPhotos = act.remediation_image_urls || act.image_urls || "[]";
+        let actPhotos = [];
+        try {
+            const parsed = JSON.parse(rawPhotos);
+            actPhotos = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (e) {
+            if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) actPhotos = [rawPhotos];
         }
-        reportBox.innerHTML = html;
+
+        actHtml = `
+            <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
+                <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
+                <div style="font-size:15px; margin-bottom:10px; font-weight: bold; color: #2d3748;">
+                    ${act.corrective_action || "Нарушение устранено (текст не указан)"}
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                    ${actPhotos.map(url => `
+                        <img src="${url}" onclick="window.open('${url}', '_blank')" 
+                             style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    `).join('')}
+                </div>
+                ${act.worker_full_name ? `<div style="margin-top:10px; font-size:12px; color:#666;">Ответственный: ${act.worker_full_name}</div>` : ''}
+            </div>`;
     }
 
+    // 2. Затем проверяем, нет ли дополнительных отчетов в таблице remediation_reports
+    const { data: reports } = await _supabase
+        .from('remediation_reports')
+        .select('*, profiles!worker_id(username)')
+        .eq('act_id', act.id)
+        .order('created_at', { ascending: false });
+
+    let tableHtml = '';
+    if (reports && reports.length > 0) {
+        tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;">
+                    <h4 style="margin:0 0 15px 0; color: #22543d;">📋 ДОПОЛНИТЕЛЬНЫЕ ФОТО/ОТЧЕТЫ</h4>`;
+        
+        tableHtml += reports.map(r => {
+            let rPhotos = [];
+            try {
+                const parsed = JSON.parse(r.photo_url || r.image_url || "[]");
+                rPhotos = Array.isArray(parsed) ? parsed : [parsed];
+            } catch (e) {
+                if (r.photo_url || r.image_url) rPhotos = [r.photo_url || r.image_url];
+            }
+            return `
+                <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+                    <div style="font-size:12px; color:#718096; margin-bottom:5px;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
+                    <div style="font-size:14px; color:#2d3748;">${r.description || ''}</div>
+                    <div style="display:flex; gap:8px; margin-top:10px; flex-wrap: wrap;">
+                        ${rPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:120px; height:90px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid #ddd;">`).join('')}
+                    </div>
+                </div>`;
+        }).join('') + `</div>`;
+    }
+
+    // Объединяем оба вида отчетов
+    reportBox.innerHTML = actHtml + tableHtml;
+}
     function renderActionButtons(act) {
         const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
