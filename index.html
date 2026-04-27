@@ -284,11 +284,10 @@
 
         localStorage.setItem('userProfile', JSON.stringify(profile));
         currentUser = profile;
-        window.currentUser = profile; // Для глобального доступа в loadActs
+        window.currentUser = profile; // Глобальный доступ для защиты фильтров
 
         document.getElementById('loginForm').style.display='none';
         document.getElementById('mainContent').style.display='block';
-
         const nav = document.getElementById('extinguisher-nav');
         const workerBtn = document.getElementById('manageWorkersBtn');
         if (profile.role === 'Начальник цеха' || profile.role === 'Начальник отдела') {
@@ -300,7 +299,7 @@
         }
 
         document.getElementById('welcomeText').innerText = profile.username;
-        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
+        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department || ''}`;
         
         if (profile.can_manage_users) {
             const adminBtn = document.getElementById('adminBtn');
@@ -311,7 +310,7 @@
         allUsers = users || [];
 
         loadActs();
-        setTimeout(checkExtinguisherAlerts, 1000);
+        setTimeout(checkExtinguisherAlerts, 1000); 
     }
 
     window.openWorkerManager = function() {
@@ -405,6 +404,7 @@
 
     async function loadActs() {
         if (typeof _supabase === 'undefined') return;
+        
         const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (error || !data) return;
 
@@ -443,7 +443,7 @@
                             (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
             }
             else {
-                isVisible = true; 
+                isVisible = true;
             }
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
@@ -455,7 +455,7 @@
             return isVisible && matchesSearch && matchesStatus;
         });
 
-        // --- СОРТИРОВКА ---
+        // СОРТИРОВКА ВНУТРИ ФУНКЦИИ
         filtered.sort((a, b) => {
             if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
                 return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
@@ -467,7 +467,6 @@
             return 0;
         });
 
-        // --- ОТРИСОВКА ---
         renderTable(filtered);
     }
 
@@ -528,7 +527,7 @@
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
         let law = act.violation_article || 'ППР РФ';
         if (law.includes("ППР РФ") && !law.includes("1479")) law += " утв. Постановлением Правительства РФ от 16 сентября 2020 г. №1479";
-        
+
         const action = act.action_required || 'Устранить нарушение';
         const deadline = act.deadline || '—';
         const responsible = act.responsible_person || 'Начальник цеха';
@@ -633,7 +632,7 @@
                 <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
                     <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
                     <div style="font-size:15px; margin-bottom:10px; font-weight: bold; color: #2d3748;">
-                        ${act.corrective_action || "Нарушение устранено (текст не указан)"}
+                        ${act.corrective_action || "Описание работ не предоставлено"}
                     </div>
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
                         ${actPhotos.map(url => `
@@ -721,8 +720,8 @@
                 <option value="">-- Выберите исполнителя --</option>
                 ${allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
             </select>
-            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly>
-            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly>
+            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
+            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
             <button id="tempAssignBtn" style="padding:8px; width:100%; background:#28a745; color:white; border:none; cursor:pointer; border-radius:5px; font-weight:bold;">СОХРАНИТЬ ДАННЫЕ</button>`;
         document.getElementById('actionButtons').appendChild(assignDiv);
         
