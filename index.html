@@ -509,9 +509,9 @@
                     <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
                     <td align="center">${statusBadge}</td>
                 </tr>`;
-        }).join('');
-    }
-} // <--- Вот эта скобка закрывает всю функцию loadActs
+        }).join(''); // Закрыли .map
+    } // Закрыли if (actsTable)
+} // Закрыли async function loadActs
 
    async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
