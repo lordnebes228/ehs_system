@@ -465,35 +465,39 @@
         console.log("Filtered acts:", filtered);
     }
 }
-        // ДОБАВЛЕНА СОРТИРОВКА ДАННЫХ ПЕРЕД ОТРИСОВКОЙ
-        filtered.sort((a, b) => {
-            if (sortColumn === 'seqNumber') {
-                return sortDescending ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
-            } else if (sortColumn === 'created_at') {
-                let dateA = new Date(a.created_at).getTime();
-                let dateB = new Date(b.created_at).getTime();
-                return sortDescending ? dateB - dateA : dateA - dateB;
+       // --- СОРТИРОВКА ---
+    filtered.sort((a, b) => {
+        if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
+            return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+        } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
+            let dateA = new Date(a.created_at).getTime();
+            let dateB = new Date(b.created_at).getTime();
+            return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
+        }
+        return 0;
+    });
+
+    // --- ОТРИСОВКА ---
+    const actsTable = document.getElementById('actsTable');
+    if (actsTable) {
+        actsTable.innerHTML = filtered.map(a => {
+            let statusBadge = '';
+            if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
+            else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
+            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
+            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
+
+            let photoUrls = [];
+            try { 
+                photoUrls = JSON.parse(a.image_urls || '[]'); 
+            } catch(e) { 
+                photoUrls = []; 
             }
-            return 0;
-        });
+            const photoUrl = photoUrls[0] || '';
 
-        const actsTable = document.getElementById('actsTable');
-        if (actsTable) {
-            actsTable.innerHTML = filtered.map(a => {
-                let statusBadge = '';
-                if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
-                else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
-                else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
-                else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
-
-                const photoUrls = JSON.parse(a.image_urls || '[]');
-                const photoUrl = photoUrls[0] || '';
-
-                
-return `
-<tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
-    <td style="padding:10px 5px; min-width:80px;">
-...
+            return `
+                <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
+                    <td style="padding:10px 5px; min-width:80px;">
                         <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
                         <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
                     </td>
@@ -505,9 +509,9 @@ return `
                     <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
                     <td align="center">${statusBadge}</td>
                 </tr>`;
-            }).join('');
-        }
+        }).join('');
     }
+} // <--- Вот эта скобка закрывает всю функцию loadActs
 
    async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
