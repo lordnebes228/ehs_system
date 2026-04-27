@@ -224,7 +224,7 @@
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    
+
     let currentUser = null;
     let allUsers = []; 
 
@@ -235,9 +235,9 @@
 
     window.toggleSort = function(col) {
         if (sortColumn === col) { 
-            sortDescending = !sortDescending; 
+            sortDescending = !sortDescending;
         } else { 
-            sortColumn = col; 
+            sortColumn = col;
             sortDescending = true; 
         }
         loadActs();
@@ -296,7 +296,7 @@
         }
 
         document.getElementById('welcomeText').innerText = profile.username;
-        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department || ''}`;
+        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
         
         if (profile.can_manage_users) {
             const adminBtn = document.getElementById('adminBtn');
@@ -360,17 +360,13 @@
     async function checkExtinguisherAlerts() {
         if (!currentUser) return;
         const isInspector = currentUser.role === 'Инспектор' || currentUser.role === 'Начальник управления' || (currentUser.department && (currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ')));
-        let query = _supabase.from('extinguishers').select('*');
+        let query = _supabase.from('extinguishers').select('next_check');
         if (!isInspector && currentUser.department) {
             query = query.eq('department', currentUser.department);
         }
 
         const { data, error } = await query;
-        if (error) {
-            console.error("Ошибка уведомлений:", error.message);
-            return;
-        }
-        if (!data || data.length === 0) return;
+        if (error || !data || data.length === 0) return;
 
         const now = new Date();
         const twoMonthsLater = new Date();
@@ -378,21 +374,19 @@
 
         let alertCount = 0;
         data.forEach(ext => {
-            const dateVal = ext.next_check || ext.date_check;
-            if (dateVal) {
-                const checkDate = new Date(dateVal);
+            if (ext.next_check) {
+                const checkDate = new Date(ext.next_check);
                 if (checkDate <= twoMonthsLater) alertCount++;
             }
         });
         if (alertCount > 0) {
-            showNotificationToast(`⚠️ <b>Внимание!</b><br>Огнетушителей, требующих проверки: <b>${alertCount} шт.</b><br><small>Перейдите в Реестр для подробностей.</small>`);
+            showNotificationToast(`⚠️ <b>Внимание!</b><br>Огнетушителей, требующих проверки (или уже просроченных): <b>${alertCount} шт.</b><br><small>Перейдите в Реестр для подробностей.</small>`);
         }
     }
 
     function showNotificationToast(msg) {
         const area = document.getElementById('notificationArea');
         const toast = document.createElement('div');
-        toast.className = 'toast-msg';
         toast.style.background = '#e74c3c';
         toast.style.color = 'white';
         toast.style.padding = '15px 20px';
@@ -407,11 +401,13 @@
 
     async function loadActs() {
         if (typeof _supabase === 'undefined') return;
-        
         const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (error || !data) return;
 
-        if (!window.currentUser) return; 
+        if (!window.currentUser) {
+            console.warn("loadActs: Данные пользователя еще не загружены.");
+            return; 
+        }
 
         data.forEach((act, index) => {
             act.seqNumber = data.length - index;
@@ -423,16 +419,27 @@
 
         let filtered = data.filter(a => {
             let isVisible = false;
+            
             const userDept = window.currentUser.department || "";
             const userRole = window.currentUser.role || "";
             const userId = window.currentUser.id || "";
             const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
 
-            if (userRole === 'Начальник отдела') isVisible = (a.created_by_dept === userDept);
-            else if (userRole === 'Начальник управления') isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-            else if (userRole === 'Начальник цеха') isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
-            else if (userRole === 'Назначенное лицо') isVisible = (a.assigned_to === userId) || (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
-            else isVisible = true;
+            if (userRole === 'Начальник отдела') {
+                isVisible = (a.created_by_dept === userDept);
+            } 
+            else if (userRole === 'Начальник управления') {
+                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+            }
+            else if (userRole === 'Начальник цеха') {
+                isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
+            }
+            else if (userRole === 'Назначенное лицо') {
+                isVisible = (a.assigned_to === userId) || (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
+            }
+            else {
+                isVisible = true;
+            }
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
             let matchesStatus = true;
@@ -444,12 +451,12 @@
         });
 
         filtered.sort((a, b) => {
-            if (sortColumn === 'seqNumber') {
-                return sortDescending ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
-            } else if (sortColumn === 'created_at') {
+            if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
+                return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+            } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
                 let dateA = new Date(a.created_at).getTime();
                 let dateB = new Date(b.created_at).getTime();
-                return sortDescending ? dateB - dateA : dateA - dateB;
+                return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
             }
             return 0;
         });
@@ -479,7 +486,9 @@
                         <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
                     </td>
                     <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
-                    <td><img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" onerror="this.style.display='none'"></td>
+                    <td>
+                        <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" onerror="this.style.display='none'">
+                    </td>
                     <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
                     <td align="center">${statusBadge}</td>
                 </tr>`;
@@ -494,7 +503,9 @@
     async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
         const d = new Date(act.created_at).toLocaleDateString();
-        const fullNumber = `${act.seqNumber || 1}/11`;
+        const simpleNum = act.seqNumber || 1;
+        const fullNumber = `${simpleNum}/11`;
+
         const deptName = act.created_by_dept || "Отдел пожарной безопасности";
         const targetShop = act.target_shop || "Цех";
         
@@ -563,6 +574,16 @@
                          <div>${deptName}</div><div>${deptStamp}</div>
                     </div>
                 </div>
+                <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #ccc;">
+                     <div style="font-size:12px; color: #555;">
+                        <b>Статус получения (Цех):</b><br>
+                        ${act.is_fully_signed ? '<span style="color:green">Документ передан в системе ЭДО. Ожидает исполнения.</span>' : '<span style="color:orange">Документ на стадии согласования инспектором. Цех еще не видит акт.</span>'}
+                     </div>
+                 </div>
+                <div style="margin-top:20px; font-size:12px;">
+                    Отдел пожарной безопасности<br>А.В. Камардин<br>Тел. 8 994 021 73 13
+                </div>
+                <div style="margin-top:20px; border-bottom: 2px solid black; font-weight:bold;">Фотофиксация нарушения:</div>
                 <div id="photoContainer" style="margin-top:10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
                 <div id="remediationReports" style="margin-top:20px;"></div>
             </div>
@@ -586,31 +607,72 @@
         if (!reportBox) return;
 
         let actHtml = '';
-        if (act.is_remediated || act.corrective_action) {
-            const rawPhotos = act.remediation_image_urls || act.image_urls || "[]";
+        
+        if (act.is_remediated || act.corrective_action || act.remediation_image_urls) {
             let actPhotos = [];
-            try {
-                const parsed = JSON.parse(rawPhotos);
-                actPhotos = Array.isArray(parsed) ? parsed : [parsed];
-            } catch (e) {
-                if (typeof rawPhotos === 'string' && rawPhotos.startsWith('http')) actPhotos = [rawPhotos];
+            
+            // ВАЖНО: jsonb от Supabase уже приходит как массив. Строго проверяем тип.
+            if (act.remediation_image_urls) {
+                if (Array.isArray(act.remediation_image_urls)) {
+                    actPhotos = act.remediation_image_urls;
+                } else if (typeof act.remediation_image_urls === 'string') {
+                    try { 
+                        actPhotos = JSON.parse(act.remediation_image_urls); 
+                        if (!Array.isArray(actPhotos)) actPhotos = [actPhotos];
+                    } catch (e) { 
+                        actPhotos = [act.remediation_image_urls]; 
+                    }
+                }
             }
 
             actHtml = `
                 <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
                     <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
                     <div style="font-size:15px; margin-bottom:10px; font-weight: bold; color: #2d3748;">
-                        ${act.corrective_action || "Описание работ не предоставлено"}
+                        ${act.corrective_action || "Нарушение устранено (текст не указан)"}
                     </div>
+                    ${actPhotos.length > 0 ? `
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        ${actPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer;">`).join('')}
-                    </div>
+                        ${actPhotos.map(url => `
+                            <img src="${url}" onclick="window.open('${url}', '_blank')" 
+                                 style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        `).join('')}
+                    </div>` : ''}
+                    ${act.worker_full_name ? `<div style="margin-top:10px; font-size:12px; color:#666;">Ответственный: ${act.worker_full_name}</div>` : ''}
                 </div>`;
         }
 
-        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
+        const { data: reports } = await _supabase
+            .from('remediation_reports')
+            .select('*, profiles!worker_id(username)')
+            .eq('act_id', act.id)
+            .order('created_at', { ascending: false });
 
-        let tableHtml = (reports && reports.length > 0) ? `<div style="margin-top:15px;">${reports.map(r => `<div style="margin-bottom:10px;">👤 <b>${r.profiles?.username}:</b> ${r.description}</div>`).join('')}</div>` : '';
+        let tableHtml = '';
+        if (reports && reports.length > 0) {
+            tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;">
+                        <h4 style="margin:0 0 15px 0; color: #22543d;">📋 ДОПОЛНИТЕЛЬНЫЕ ФОТО/ОТЧЕТЫ</h4>`;
+            tableHtml += reports.map(r => {
+                let rPhotos = [];
+                if (r.photo_url || r.image_url) {
+                    let raw = r.photo_url || r.image_url;
+                    if (Array.isArray(raw)) rPhotos = raw;
+                    else if (typeof raw === 'string') {
+                        try { rPhotos = JSON.parse(raw); if (!Array.isArray(rPhotos)) rPhotos = [rPhotos]; } 
+                        catch (e) { rPhotos = [raw]; }
+                    }
+                }
+                return `
+                    <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+                        <div style="font-size:12px; color:#718096; margin-bottom:5px;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
+                        <div style="font-size:14px; color:#2d3748;">${r.description || ''}</div>
+                        ${rPhotos.length > 0 ? `
+                        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap: wrap;">
+                            ${rPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:120px; height:90px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid #ddd;">`).join('')}
+                        </div>` : ''}
+                    </div>`;
+            }).join('') + `</div>`;
+        }
         reportBox.innerHTML = actHtml + tableHtml;
     }
 
@@ -628,23 +690,49 @@
         }
         
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
-            html += `<button onclick="showAssignUI('${act.id}')" style="background:#4a5568; color:white; padding:10px 15px; border:none; border-radius:5px; cursor:pointer;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
+            const assignedUser = allUsers.find(u => u.id === act.assigned_to);
+            const nameText = assignedUser ? `<b style="color:#2b6cb0;">${assignedUser.username}</b>` : `<span style="color:#e53e3e;">не назначен</span>`;
+            
+            const extraInfo = (act.worker_full_name || act.worker_phone) 
+                ? `<div style="margin-top:5px; font-size:12px; color:#555;">${act.worker_full_name || ''} ${act.worker_phone ? '📞 ' + act.worker_phone : ''}</div>` 
+                : '';
+
+            html += `
+                <div style="margin-bottom: 15px; font-size: 14px; background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    👤 <b>Текущий исполнитель:</b> ${nameText} ${extraInfo}
+                </div>
+                <button onclick="showAssignUI('${act.id}')" style="background:#4a5568; color:white; padding:10px 15px; border:none; border-radius:5px; cursor:pointer; display: flex; align-items: center; gap: 8px;">
+                    <span>👤</span> НАЗНАЧИТЬ / СМЕНИТЬ ИСПОЛНИТЕЛЯ
+                </button>`;
         }
+        
         btnBox.innerHTML = html;
     }
-
+        
     function showAssignUI(actId) {
+        let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
+        if (currentUser.role === 'Начальник цеха') {
+            allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
+        }
+
         const assignDiv = document.createElement('div');
-        assignDiv.style.marginTop = "15px";
+        assignDiv.style.marginTop = "15px"; assignDiv.style.padding = "10px"; assignDiv.style.background = "#eee";
         assignDiv.innerHTML = `
             <select id="tempUserSelect" style="padding:5px; width:100%; margin-bottom:5px;" onchange="autoFillWorkerData()">
                 <option value="">-- Выберите исполнителя --</option>
-                ${allUsers.filter(u => u.role === 'Назначенное лицо').map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
+                ${allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
             </select>
-            <input type="text" id="tempUserName" placeholder="ФИО" style="padding:5px; width:100%; margin-bottom:5px;" readonly>
-            <input type="text" id="tempUserPhone" placeholder="Телефон" style="padding:5px; width:100%; margin-bottom:5px;" readonly>
-            <button onclick="saveAssignment('${actId}', document.getElementById('tempUserSelect').value, document.getElementById('tempUserName').value, document.getElementById('tempUserPhone').value)" style="padding:8px; width:100%; background:#28a745; color:white; border:none; border-radius:5px;">СОХРАНИТЬ</button>`;
+            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
+            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
+            <button id="tempAssignBtn" style="padding:8px; width:100%; background:#28a745; color:white; border:none; cursor:pointer; border-radius:5px; font-weight:bold;">СОХРАНИТЬ ДАННЫЕ</button>`;
         document.getElementById('actionButtons').appendChild(assignDiv);
+        
+        document.getElementById('tempAssignBtn').onclick = () => saveAssignment(
+            actId, 
+            document.getElementById('tempUserSelect').value,
+            document.getElementById('tempUserName').value,
+            document.getElementById('tempUserPhone').value
+        );
     }
 
     window.autoFillWorkerData = function() {
@@ -653,21 +741,34 @@
         if (user) {
             document.getElementById('tempUserName').value = user.full_name || '';
             document.getElementById('tempUserPhone').value = user.phone || '';
+        } else {
+            document.getElementById('tempUserName').value = '';
+            document.getElementById('tempUserPhone').value = '';
         }
     };
-
+    
     async function saveAssignment(actId, userUuid, fullName, phone) {
         if (!userUuid) return alert("Выберите исполнителя!");
-        const { error } = await _supabase.from('acts').update({ assigned_to: userUuid, worker_full_name: fullName, worker_phone: phone }).eq('id', actId);
-        if (!error) { alert("Исполнитель назначен!"); closeAct(); loadActs(); }
+        const { error } = await _supabase.from('acts').update({ 
+            assigned_to: userUuid,
+            worker_full_name: fullName,
+            worker_phone: phone 
+        }).eq('id', actId);
+        if (error) alert("Ошибка: " + error.message);
+        else { alert("Исполнитель назначен!"); closeAct(); loadActs(); }
     }
 
     async function approveDept(id) { if(confirm("Согласовать акт?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
-    async function signFully(id) { if(confirm("Подписать акт?")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
-    async function rejectAct(id) { if(confirm("Удалить акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
+    async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
+    async function rejectAct(id) { if(confirm("Удалить этот акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
     
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    async function signOut() { await _supabase.auth.signOut(); location.reload(); }
+    
+    async function signOut() { 
+        await _supabase.auth.signOut();
+        localStorage.removeItem('userProfile'); 
+        location.reload(); 
+    }
 </script>
 </body>
 </html>
