@@ -246,6 +246,7 @@
     async function signIn() {
         const loginInput = document.getElementById('userLogin');
         const passInput = document.getElementById('userPass');
+        if (!loginInput || !passInput) return;
         const login = loginInput.value.trim();
         const pass = passInput.value;
 
@@ -296,7 +297,7 @@
         }
 
         document.getElementById('welcomeText').innerText = profile.username;
-        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department}`;
+        document.getElementById('userRoleInfo').innerText = `${profile.role} | ${profile.department || ''}`;
         
         if (profile.can_manage_users) {
             const adminBtn = document.getElementById('adminBtn');
@@ -317,8 +318,10 @@
         }
 
         const select = document.getElementById('wmSelect');
-        select.innerHTML = '<option value="">-- Выберите сотрудника --</option>' + 
-                           allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+        if (select) {
+            select.innerHTML = '<option value="">-- Выберите сотрудника --</option>' + 
+                               allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
+        }
         document.getElementById('wmFullName').value = '';
         document.getElementById('wmPhone').value = '';
         document.getElementById('workerManagerModal').style.display = 'block';
@@ -386,6 +389,7 @@
 
     function showNotificationToast(msg) {
         const area = document.getElementById('notificationArea');
+        if (!area) return;
         const toast = document.createElement('div');
         toast.style.background = '#e74c3c';
         toast.style.color = 'white';
@@ -395,6 +399,7 @@
         toast.style.position = 'relative';
         toast.style.fontSize = '14px';
         toast.style.lineHeight = '1.4';
+        toast.style.marginBottom = '10px';
         toast.innerHTML = msg + `<span style="position:absolute; top:10px; right:10px; cursor:pointer; font-weight:bold; font-size:16px;" onclick="this.parentElement.remove()">✕</span>`;
         area.appendChild(toast);
     }
@@ -404,10 +409,7 @@
         const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
         if (error || !data) return;
 
-        if (!window.currentUser) {
-            console.warn("loadActs: Данные пользователя еще не загружены.");
-            return; 
-        }
+        if (!window.currentUser) return;
 
         data.forEach((act, index) => {
             act.seqNumber = data.length - index;
@@ -419,27 +421,16 @@
 
         let filtered = data.filter(a => {
             let isVisible = false;
-            
             const userDept = window.currentUser.department || "";
             const userRole = window.currentUser.role || "";
             const userId = window.currentUser.id || "";
             const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
 
-            if (userRole === 'Начальник отдела') {
-                isVisible = (a.created_by_dept === userDept);
-            } 
-            else if (userRole === 'Начальник управления') {
-                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-            }
-            else if (userRole === 'Начальник цеха') {
-                isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
-            }
-            else if (userRole === 'Назначенное лицо') {
-                isVisible = (a.assigned_to === userId) || (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
-            }
-            else {
-                isVisible = true;
-            }
+            if (userRole === 'Начальник отдела') isVisible = (a.created_by_dept === userDept);
+            else if (userRole === 'Начальник управления') isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+            else if (userRole === 'Начальник цеха') isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
+            else if (userRole === 'Назначенное лицо') isVisible = (a.assigned_to === userId) || (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
+            else isVisible = true;
 
             const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
             let matchesStatus = true;
@@ -451,14 +442,10 @@
         });
 
         filtered.sort((a, b) => {
-            if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
-                return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
-            } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
-                let dateA = new Date(a.created_at).getTime();
-                let dateB = new Date(b.created_at).getTime();
-                return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
-            }
-            return 0;
+            if (sortColumn === 'seqNumber') return sortDescending ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+            let dateA = new Date(a.created_at).getTime();
+            let dateB = new Date(b.created_at).getTime();
+            return sortDescending ? dateB - dateA : dateA - dateB;
         });
 
         renderTable(filtered);
@@ -469,16 +456,8 @@
         if (!actsTable) return;
 
         actsTable.innerHTML = filtered.map(a => {
-            let statusBadge = '';
-            if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
-            else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
-
-            let photoUrls = [];
-            try { photoUrls = JSON.parse(a.image_urls || '[]'); } catch(e) { photoUrls = []; }
-            const photoUrl = photoUrls[0] || '';
-
+            let statusBadge = a.is_remediated ? '<span class="badge bg-remediated">ОТЧЕТ</span>' : (a.is_fully_signed ? '<span class="badge bg-done">ПОДПИСАНО</span>' : (a.is_dept_approved ? '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>' : '<span class="badge bg-wait">ОТДЕЛ</span>'));
+            let photoUrls = []; try { photoUrls = JSON.parse(a.image_urls || '[]'); } catch(e) {}
             return `
                 <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
                     <td style="padding:10px 5px; min-width:80px;">
@@ -486,9 +465,7 @@
                         <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
                     </td>
                     <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
-                    <td>
-                        <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" onerror="this.style.display='none'">
-                    </td>
+                    <td><img src="${photoUrls[0] || ''}" style="width:50px; height:40px; object-fit:cover; border-radius:4px;" onerror="this.style.display='none'"></td>
                     <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
                     <td align="center">${statusBadge}</td>
                 </tr>`;
@@ -503,9 +480,7 @@
     async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
         const d = new Date(act.created_at).toLocaleDateString();
-        const simpleNum = act.seqNumber || 1;
-        const fullNumber = `${simpleNum}/11`;
-
+        const fullNumber = `${act.seqNumber || 1}/11`;
         const deptName = act.created_by_dept || "Отдел пожарной безопасности";
         const targetShop = act.target_shop || "Цех";
         
@@ -515,88 +490,42 @@
 
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
         let law = act.violation_article || 'ППР РФ';
-        if (law.includes("ППР РФ") && !law.includes("1479")) law += " утв. Постановлением Правительства РФ от 16 сентября 2020 г. №1479";
-
         const action = act.action_required || 'Устранить нарушение';
         const deadline = act.deadline || '—';
         const responsible = act.responsible_person || 'Начальник цеха';
 
-        const deptStamp = act.is_dept_approved 
-            ? `<div style="border: 2px solid #28a745; color: #28a745; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">СОГЛАСОВАНО<br><span style="font-size:10px">ЭЛЕКТРОННО</span></div>` 
-            : `<span style="color:#ccc;">(ожидает согласования)</span>`;
+        const deptStamp = act.is_dept_approved ? `<div style="border: 2px solid #28a745; color: #28a745; padding: 5px; transform: rotate(-3deg); font-weight: bold; border-radius: 5px;">СОГЛАСОВАНО</div>` : `<span style="color:#ccc;">(ожидает)</span>`;
+        const adminStamp = act.is_fully_signed ? `<div style="border: 2px solid #0056b3; color: #0056b3; padding: 5px; transform: rotate(-3deg); font-weight: bold; border-radius: 5px;">ПОДПИСАНО</div>` : `<span style="color:#ccc;">(на подписи)</span>`;
 
-        const adminStamp = act.is_fully_signed
-            ? `<div style="border: 2px solid #0056b3; color: #0056b3; padding: 5px 10px; display: inline-block; transform: rotate(-3deg); font-weight: bold; border-radius: 5px; opacity: 0.8;">ПОДПИСАНО<br><span style="font-size:10px">Начальник УПБ, ОТ и ОС<br>Саруханов Г.М.</span></div>`
-            : `<span style="color:#ccc;">(на подписи)</span>`;
-
-        const contentHTML = `
-            <div style="font-family: 'Times New Roman', serif; color:black; line-height:1.2; padding: 20px; position: relative;">
-                <div onclick="closeAct()" style="position: absolute; top: -10px; right: -10px; cursor: pointer; font-size: 30px; font-weight: bold; color: #aaa; padding: 10px;">&times;</div>
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; font-size:14px;">
-                    <div style="width:45%;"><div style="border:1px solid #ccc; padding:5px;">${deptName}</div></div>
-                    <div style="width:45%; text-align:right;"><div style="border:1px solid #ccc; padding:5px;">Руководителям подразделений<br>№ 310</div></div>
+        document.getElementById('printableArea').innerHTML = `
+            <div style="font-family: 'Times New Roman', serif; color:black; padding: 20px; position: relative;">
+                <div onclick="closeAct()" style="position: absolute; top: -10px; right: -10px; cursor: pointer; font-size: 30px;">&times;</div>
+                <div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:20px;">
+                    <div style="border:1px solid #ccc; padding:5px;">${deptName}</div>
+                    <div style="border:1px solid #ccc; padding:5px;">Руководителям подразделений</div>
                 </div>
-                <div style="text-align:center; margin-bottom:15px;"><h2 style="margin:0; font-size:18px; font-weight:bold;">ПРЕДПИСАНИЕ</h2></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:14px; border-bottom:1px solid #000; padding-bottom:5px;">
-                    <div>${d} <span style="font-size:10px; color:#666;">дата</span></div>
-                    <div>№ ${fullNumber}</div>
-                </div>
-                <p style="text-indent:30px; margin-bottom:15px; text-align:justify;">
-                    В ходе осуществления ежедневного контроля требований <b>${controlType}</b> в подразделении <b>${targetShop}</b> ${d} были выявлены нарушения:
-                </p>
+                <h2 style="text-align:center; font-size:18px;">ПРЕДПИСАНИЕ № ${fullNumber}</h2>
+                <div style="border-bottom:1px solid #000; padding-bottom:5px; margin-bottom:15px;">Дата: ${d}</div>
+                <p>В ходе контроля <b>${controlType}</b> в подразделении <b>${targetShop}</b> выявлены нарушения:</p>
                 <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:20px;">
-                    <thead>
-                        <tr style="background:#f0f0f0;">
-                            <th style="border:1px solid black; padding:5px; width:30px;">№</th>
-                            <th style="border:1px solid black; padding:5px;">Выявленные нарушения</th>
-                            <th style="border:1px solid black; padding:5px;">Документ</th>
-                            <th style="border:1px solid black; padding:5px;">Мероприятия</th>
-                            <th style="border:1px solid black; padding:5px; width:80px;">Сроки</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">1</td>
-                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${violation}<br><br><b>Ответственный:</b> ${responsible}</td>
-                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${law}</td>
-                            <td style="border:1px solid black; padding:5px; vertical-align:top;">${action}</td>
-                            <td style="border:1px solid black; padding:5px; text-align:center; vertical-align:top;">${deadline}</td>
-                        </tr>
-                    </tbody>
+                    <thead><tr style="background:#f0f0f0;"><th style="border:1px solid black; padding:5px;">Нарушение</th><th style="border:1px solid black; padding:5px;">Документ</th><th style="border:1px solid black; padding:5px;">Мероприятия</th><th style="border:1px solid black; padding:5px;">Срок</th></tr></thead>
+                    <tbody><tr><td style="border:1px solid black; padding:5px;">${violation}<br><b>Отв:</b> ${responsible}</td><td style="border:1px solid black; padding:5px;">${law}</td><td style="border:1px solid black; padding:5px;">${action}</td><td style="border:1px solid black; padding:5px; text-align:center;">${deadline}</td></tr></tbody>
                 </table>
-                <div style="margin-top:20px; margin-bottom:20px;">
-                    <div style="margin-bottom: 10px;"><b>И.о. нач. управления / УПБ, ОТ и ОС</b></div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                         <div>(Г. М. Саруханов)</div><div>${adminStamp}</div>
-                    </div>
-                    <div style="margin-top: 20px; margin-bottom: 10px;"><b>Согласовано (Нач. отдела):</b></div>
-                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                         <div>${deptName}</div><div>${deptStamp}</div>
-                    </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <div><b>Нач. управления:</b><br>Саруханов Г.М.</div><div>${adminStamp}</div>
                 </div>
-                <div style="margin-top:20px; padding-top:10px; border-top:1px dashed #ccc;">
-                     <div style="font-size:12px; color: #555;">
-                        <b>Статус получения (Цех):</b><br>
-                        ${act.is_fully_signed ? '<span style="color:green">Документ передан в системе ЭДО. Ожидает исполнения.</span>' : '<span style="color:orange">Документ на стадии согласования инспектором. Цех еще не видит акт.</span>'}
-                     </div>
-                 </div>
-                <div style="margin-top:20px; font-size:12px;">
-                    Отдел пожарной безопасности<br>А.В. Камардин<br>Тел. 8 994 021 73 13
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div><b>Нач. отдела:</b><br>${deptName}</div><div>${deptStamp}</div>
                 </div>
-                <div style="margin-top:20px; border-bottom: 2px solid black; font-weight:bold;">Фотофиксация нарушения:</div>
-                <div id="photoContainer" style="margin-top:10px; display: flex; flex-wrap: wrap; gap: 10px;"></div>
+                <div style="margin-top:20px; border-bottom: 2px solid black; font-weight:bold;">Фотофиксация:</div>
+                <div id="photoContainer" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;"></div>
                 <div id="remediationReports" style="margin-top:20px;"></div>
             </div>
-            <div id="actionButtons" style="margin-top:30px; padding: 20px; border-top:2px solid #eee; background: #fafafa;"></div>
+            <div id="actionButtons" style="padding:20px; background:#f9f9f9; border-top:1px solid #ddd;"></div>
         `;
 
-        const container = document.getElementById('printableArea');
-        if (container) container.innerHTML = contentHTML;
-
-        const photos = JSON.parse(act.image_urls || "[]");
-        document.getElementById('photoContainer').innerHTML = photos.length > 0 
-            ? photos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="cursor:zoom-in; width:200px; height:150px; object-fit:cover; border:1px solid #ccc; border-radius:4px;">`).join('')
-            : "Нет фото";
+        let photos = []; try { photos = JSON.parse(act.image_urls || "[]"); } catch(e){}
+        document.getElementById('photoContainer').innerHTML = photos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:200px; height:150px; object-fit:cover; border-radius:4px; border:1px solid #ccc; cursor:zoom-in;">`).join('');
 
         await renderRemediationReports(act);
         renderActionButtons(act);
@@ -607,75 +536,32 @@
         if (!reportBox) return;
 
         let actHtml = '';
-        
         if (act.is_remediated || act.corrective_action || act.remediation_image_urls) {
-            let actPhotos = [];
-            
-            // ВАЖНО: jsonb от Supabase уже приходит как массив. Строго проверяем тип.
-            if (act.remediation_image_urls) {
-                if (Array.isArray(act.remediation_image_urls)) {
-                    actPhotos = act.remediation_image_urls;
-                } else if (typeof act.remediation_image_urls === 'string') {
-                    try { 
-                        actPhotos = JSON.parse(act.remediation_image_urls); 
-                        if (!Array.isArray(actPhotos)) actPhotos = [actPhotos];
-                    } catch (e) { 
-                        actPhotos = [act.remediation_image_urls]; 
-                    }
-                }
+            let actPhotos = Array.isArray(act.remediation_image_urls) ? act.remediation_image_urls : [];
+            if (!Array.isArray(actPhotos) && typeof act.remediation_image_urls === 'string') {
+                try { actPhotos = JSON.parse(act.remediation_image_urls); } catch(e) { actPhotos = [act.remediation_image_urls]; }
             }
-
-       actHtml = `
+            
+            actHtml = `
                 <div style="background:#fffaf0; padding:15px; border:1px solid #fbd38d; border-radius:8px; margin-top:25px;">
                     <h4 style="margin:0 0 10px 0; color: #c05621;">✅ ОТЧЕТ ИСПОЛНИТЕЛЯ:</h4>
-                    
-                    ${act.corrective_action ? `
-                        <div style="font-size:15px; margin-bottom:10px; font-weight: bold; color: #2d3748;">
-                            ${act.corrective_action}
-                        </div>
-                    ` : ''}
-
-                    ${actPhotos.length > 0 ? `
+                    ${act.corrective_action ? `<div style="font-weight:bold; margin-bottom:10px;">${act.corrective_action}</div>` : ''}
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        ${actPhotos.map(url => `
-                            <img src="${url}" onclick="window.open('${url}', '_blank')" 
-                                 style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                        `).join('')}
-                    </div>` : ''}
-
+                        ${actPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:180px; height:130px; object-fit:cover; border-radius:6px; cursor:pointer;">`).join('')}
+                    </div>
                     ${act.worker_full_name ? `<div style="margin-top:10px; font-size:12px; color:#666;">Ответственный: ${act.worker_full_name}</div>` : ''}
                 </div>`;
+        }
 
-        const { data: reports } = await _supabase
-            .from('remediation_reports')
-            .select('*, profiles!worker_id(username)')
-            .eq('act_id', act.id)
-            .order('created_at', { ascending: false });
-
+        const { data: reports } = await _supabase.from('remediation_reports').select('*, profiles!worker_id(username)').eq('act_id', act.id).order('created_at', { ascending: false });
         let tableHtml = '';
         if (reports && reports.length > 0) {
-            tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;">
-                        <h4 style="margin:0 0 15px 0; color: #22543d;">📋 ДОПОЛНИТЕЛЬНЫЕ ФОТО/ОТЧЕТЫ</h4>`;
-            tableHtml += reports.map(r => {
-                let rPhotos = [];
-                if (r.photo_url || r.image_url) {
-                    let raw = r.photo_url || r.image_url;
-                    if (Array.isArray(raw)) rPhotos = raw;
-                    else if (typeof raw === 'string') {
-                        try { rPhotos = JSON.parse(raw); if (!Array.isArray(rPhotos)) rPhotos = [rPhotos]; } 
-                        catch (e) { rPhotos = [raw]; }
-                    }
-                }
-                return `
-                    <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
-                        <div style="font-size:12px; color:#718096; margin-bottom:5px;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
-                        <div style="font-size:14px; color:#2d3748;">${r.description || ''}</div>
-                        ${rPhotos.length > 0 ? `
-                        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap: wrap;">
-                            ${rPhotos.map(url => `<img src="${url}" onclick="window.open('${url}', '_blank')" style="width:120px; height:90px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid #ddd;">`).join('')}
-                        </div>` : ''}
-                    </div>`;
-            }).join('') + `</div>`;
+            tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;"><h4 style="margin:0 0 10px 0;">📋 ДОП. ОТЧЕТЫ</h4>`;
+            tableHtml += reports.map(r => `
+                <div style="margin-bottom:10px; background:white; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+                    <div style="font-size:12px; color:#718096;">👤 <b>${r.profiles?.username || 'Исполнитель'}</b></div>
+                    <div>${r.description || ''}</div>
+                </div>`).join('') + `</div>`;
         }
         reportBox.innerHTML = actHtml + tableHtml;
     }
@@ -684,59 +570,31 @@
         const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
         let html = "";
-        
         if (currentUser.role === 'Начальник отдела' && !act.is_dept_approved && act.created_by_dept === currentUser.department) {
-            html += `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:12px 20px; border:none; border-radius:5px; margin-right:10px; cursor:pointer; font-weight:bold;">✅ СОГЛАСОВАТЬ (ОТДЕЛ)</button>`;
-            html += `<button onclick="rejectAct('${act.id}')" style="background:#dc3545; color:white; padding:12px 20px; border:none; border-radius:5px; cursor:pointer;">УДАЛИТЬ</button>`;
-        } 
-        else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
-            html += `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:12px 20px; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">🖋 ПОДПИСАТЬ (УПРАВЛЕНИЕ)</button>`;
+            html += `<button onclick="approveDept('${act.id}')" style="background:#28a745; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">✅ СОГЛАСОВАТЬ</button>`;
+            html += `<button onclick="rejectAct('${act.id}')" style="background:#dc3545; color:white; padding:12px; border:none; border-radius:5px; margin-left:10px; cursor:pointer;">УДАЛИТЬ</button>`;
+        } else if (currentUser.role === 'Начальник управления' && !act.is_fully_signed) {
+            html += `<button onclick="signFully('${act.id}')" style="background:#007bff; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">🖋 ПОДПИСАТЬ</button>`;
         }
-        
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
-            const assignedUser = allUsers.find(u => u.id === act.assigned_to);
-            const nameText = assignedUser ? `<b style="color:#2b6cb0;">${assignedUser.username}</b>` : `<span style="color:#e53e3e;">не назначен</span>`;
-            
-            const extraInfo = (act.worker_full_name || act.worker_phone) 
-                ? `<div style="margin-top:5px; font-size:12px; color:#555;">${act.worker_full_name || ''} ${act.worker_phone ? '📞 ' + act.worker_phone : ''}</div>` 
-                : '';
-
-            html += `
-                <div style="margin-bottom: 15px; font-size: 14px; background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
-                    👤 <b>Текущий исполнитель:</b> ${nameText} ${extraInfo}
-                </div>
-                <button onclick="showAssignUI('${act.id}')" style="background:#4a5568; color:white; padding:10px 15px; border:none; border-radius:5px; cursor:pointer; display: flex; align-items: center; gap: 8px;">
-                    <span>👤</span> НАЗНАЧИТЬ / СМЕНИТЬ ИСПОЛНИТЕЛЯ
-                </button>`;
+            html += `<button onclick="showAssignUI('${act.id}')" style="background:#4a5568; color:white; padding:12px; border:none; border-radius:5px; cursor:pointer; margin-top:10px;">👤 НАЗНАЧИТЬ ИСПОЛНИТЕЛЯ</button>`;
         }
-        
         btnBox.innerHTML = html;
     }
-        
-    function showAssignUI(actId) {
-        let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
-        if (currentUser.role === 'Начальник цеха') {
-            allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
-        }
 
-        const assignDiv = document.createElement('div');
-        assignDiv.style.marginTop = "15px"; assignDiv.style.padding = "10px"; assignDiv.style.background = "#eee";
-        assignDiv.innerHTML = `
-            <select id="tempUserSelect" style="padding:5px; width:100%; margin-bottom:5px;" onchange="autoFillWorkerData()">
-                <option value="">-- Выберите исполнителя --</option>
+    function showAssignUI(actId) {
+        let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо' && u.department === currentUser.department);
+        const div = document.createElement('div');
+        div.style.marginTop = "15px";
+        div.innerHTML = `
+            <select id="tempUserSelect" style="padding:8px; width:100%; margin-bottom:5px;" onchange="autoFillWorkerData()">
+                <option value="">-- Выберите --</option>
                 ${allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
             </select>
-            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
-            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
-            <button id="tempAssignBtn" style="padding:8px; width:100%; background:#28a745; color:white; border:none; cursor:pointer; border-radius:5px; font-weight:bold;">СОХРАНИТЬ ДАННЫЕ</button>`;
-        document.getElementById('actionButtons').appendChild(assignDiv);
-        
-        document.getElementById('tempAssignBtn').onclick = () => saveAssignment(
-            actId, 
-            document.getElementById('tempUserSelect').value,
-            document.getElementById('tempUserName').value,
-            document.getElementById('tempUserPhone').value
-        );
+            <input type="text" id="tempUserName" placeholder="ФИО" style="padding:8px; width:100%; margin-bottom:5px;" readonly>
+            <input type="text" id="tempUserPhone" placeholder="Телефон" style="padding:8px; width:100%; margin-bottom:5px;" readonly>
+            <button onclick="saveAssignment('${actId}', document.getElementById('tempUserSelect').value, document.getElementById('tempUserName').value, document.getElementById('tempUserPhone').value)" style="background:#28a745; color:white; padding:10px; width:100%; border:none; border-radius:5px;">СОХРАНИТЬ</button>`;
+        document.getElementById('actionButtons').appendChild(div);
     }
 
     window.autoFillWorkerData = function() {
@@ -745,34 +603,21 @@
         if (user) {
             document.getElementById('tempUserName').value = user.full_name || '';
             document.getElementById('tempUserPhone').value = user.phone || '';
-        } else {
-            document.getElementById('tempUserName').value = '';
-            document.getElementById('tempUserPhone').value = '';
         }
     };
-    
+
     async function saveAssignment(actId, userUuid, fullName, phone) {
         if (!userUuid) return alert("Выберите исполнителя!");
-        const { error } = await _supabase.from('acts').update({ 
-            assigned_to: userUuid,
-            worker_full_name: fullName,
-            worker_phone: phone 
-        }).eq('id', actId);
+        const { error } = await _supabase.from('acts').update({ assigned_to: userUuid, worker_full_name: fullName, worker_phone: phone }).eq('id', actId);
         if (error) alert("Ошибка: " + error.message);
         else { alert("Исполнитель назначен!"); closeAct(); loadActs(); }
     }
 
-    async function approveDept(id) { if(confirm("Согласовать акт?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
-    async function signFully(id) { if(confirm("Подписать акт окончательно? После этого его увидит цех.")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
-    async function rejectAct(id) { if(confirm("Удалить этот акт?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
-    
+    async function approveDept(id) { if(confirm("Согласовать?")) { await _supabase.from('acts').update({ is_dept_approved: true, signer_name_dept: currentUser.username }).eq('id', id); closeAct(); loadActs(); } }
+    async function signFully(id) { if(confirm("Подписать?")) { await _supabase.from('acts').update({ is_fully_signed: true, signer_name_admin: 'Саруханов Г.М.' }).eq('id', id); closeAct(); loadActs(); } }
+    async function rejectAct(id) { if(confirm("Удалить?")) { await _supabase.from('acts').delete().eq('id', id); closeAct(); loadActs(); } }
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
-    
-    async function signOut() { 
-        await _supabase.auth.signOut();
-        localStorage.removeItem('userProfile'); 
-        location.reload(); 
-    }
+    async function signOut() { await _supabase.auth.signOut(); localStorage.removeItem('userProfile'); location.reload(); }
 </script>
 </body>
 </html>
