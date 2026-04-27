@@ -224,7 +224,7 @@
     const SUPABASE_URL = 'https://znlizfcqmxgrnhimzgul.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_RacKEAEQhObo56gGr8BYnA_numHTBIj';
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    
+
     let currentUser = null;
     let allUsers = []; 
 
@@ -235,9 +235,9 @@
 
     window.toggleSort = function(col) {
         if (sortColumn === col) { 
-            sortDescending = !sortDescending; 
+            sortDescending = !sortDescending;
         } else { 
-            sortColumn = col; 
+            sortColumn = col;
             sortDescending = true; 
         }
         loadActs();
@@ -249,7 +249,10 @@
         const login = loginInput.value.trim();
         const pass = passInput.value;
 
-        if (!login || !pass) { alert("Введите логин и пароль"); return; }
+        if (!login || !pass) { 
+            alert("Введите логин и пароль"); 
+            return;
+        }
 
         const { error } = await _supabase.auth.signInWithPassword({ 
             email: login.includes('@') ? login : login + "@ssk.local", 
@@ -262,18 +265,16 @@
 
     async function checkSession() {
         const { data: { session } } = await _supabase.auth.getSession();
-        
         if (!session) { 
             document.getElementById('loginForm').style.display='block'; 
             document.getElementById('mainContent').style.display='none';
             const nav = document.getElementById('extinguisher-nav');
             if (nav) nav.style.display = 'none';
             document.getElementById('manageWorkersBtn').style.display = 'none';
-            return; 
+            return;
         }
         
         const { data: profile } = await _supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        
         if (!profile || !profile.can_view_acts) {
             alert("Доступ к веб-версии ограничен.");
             await _supabase.auth.signOut();
@@ -283,14 +284,15 @@
 
         localStorage.setItem('userProfile', JSON.stringify(profile));
         currentUser = profile;
+        window.currentUser = profile; // Для глобального доступа в loadActs
 
         document.getElementById('loginForm').style.display='none';
         document.getElementById('mainContent').style.display='block';
-        
+
         const nav = document.getElementById('extinguisher-nav');
         const workerBtn = document.getElementById('manageWorkersBtn');
         if (profile.role === 'Начальник цеха' || profile.role === 'Начальник отдела') {
-            if (nav) nav.style.display = 'block'; 
+            if (nav) nav.style.display = 'block';
             if (workerBtn) workerBtn.style.display = 'block';
         } else {
             if (nav) nav.style.display = 'none';
@@ -305,16 +307,14 @@
             if (adminBtn) adminBtn.style.display = 'flex';
         }
         
-        // ДОБАВЛЕНА ЗАГРУЗКА department и role для фильтрации
         const { data: users } = await _supabase.from('profiles').select('id, username, full_name, phone, department, role');
         allUsers = users || [];
 
         loadActs();
-        setTimeout(checkExtinguisherAlerts, 1000); // Небольшая задержка, чтобы интерфейс успел прогрузиться
+        setTimeout(checkExtinguisherAlerts, 1000);
     }
 
     window.openWorkerManager = function() {
-        // ФИЛЬТРАЦИЯ ИСПОЛНИТЕЛЕЙ ПО ЦЕХУ
         let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
         if (currentUser.role === 'Начальник цеха') {
             allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
@@ -346,7 +346,6 @@
         
         const fName = document.getElementById('wmFullName').value.trim();
         const phone = document.getElementById('wmPhone').value.trim();
-
         const { error } = await _supabase.from('profiles').update({ 
             full_name: fName, 
             phone: phone 
@@ -362,12 +361,9 @@
         }
     };
 
-    // ИСПРАВЛЕНА ЛОГИКА ДАТ ДЛЯ УВЕДОМЛЕНИЙ
     async function checkExtinguisherAlerts() {
         if (!currentUser) return;
-        
         const isInspector = currentUser.role === 'Инспектор' || currentUser.role === 'Начальник управления' || (currentUser.department && (currentUser.department.includes('ПБ') || currentUser.department.includes('ОТ')));
-        
         let query = _supabase.from('extinguishers').select('next_check');
         if (!isInspector && currentUser.department) {
             query = query.eq('department', currentUser.department);
@@ -378,7 +374,7 @@
 
         const now = new Date();
         const twoMonthsLater = new Date();
-        twoMonthsLater.setDate(now.getDate() + 60); // Ровно 60 дней вперед
+        twoMonthsLater.setDate(now.getDate() + 60);
 
         let alertCount = 0;
         data.forEach(ext => {
@@ -387,7 +383,6 @@
                 if (checkDate <= twoMonthsLater) alertCount++;
             }
         });
-
         if (alertCount > 0) {
             showNotificationToast(`⚠️ <b>Внимание!</b><br>Огнетушителей, требующих проверки (или уже просроченных): <b>${alertCount} шт.</b><br><small>Перейдите в Реестр для подробностей.</small>`);
         }
@@ -404,123 +399,82 @@
         toast.style.position = 'relative';
         toast.style.fontSize = '14px';
         toast.style.lineHeight = '1.4';
-        
         toast.innerHTML = msg + `<span style="position:absolute; top:10px; right:10px; cursor:pointer; font-weight:bold; font-size:16px;" onclick="this.parentElement.remove()">✕</span>`;
         area.appendChild(toast);
     }
 
- async function loadActs() {
-    // 1. Проверяем наличие Supabase и currentUser
-    if (typeof _supabase === 'undefined') return;
-    
-    const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
-    if (error || !data) return;
+    async function loadActs() {
+        if (typeof _supabase === 'undefined') return;
+        const { data, error } = await _supabase.from('acts').select('*').order('created_at', { ascending: false });
+        if (error || !data) return;
 
-    // 2. Если данных о пользователе ещё нет, выходим или ждем
-    if (!window.currentUser) {
-        console.warn("loadActs: Данные пользователя еще не загружены.");
-        return; 
+        if (!window.currentUser) {
+            console.warn("loadActs: Данные пользователя еще не загружены.");
+            return; 
+        }
+
+        data.forEach((act, index) => {
+            act.seqNumber = data.length - index;
+            act.displayId = `${act.seqNumber}/11`;
+        });
+
+        const term = (document.getElementById('actSearch')?.value || "").toLowerCase();
+        const statusFilter = (document.getElementById('statusFilter')?.value || 'all');
+
+        let filtered = data.filter(a => {
+            let isVisible = false;
+            const userDept = window.currentUser.department || "";
+            const userRole = window.currentUser.role || "";
+            const userId = window.currentUser.id || "";
+
+            const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
+
+            if (userRole === 'Начальник отдела') {
+                isVisible = (a.created_by_dept === userDept);
+            } 
+            else if (userRole === 'Начальник управления') {
+                isVisible = (a.is_dept_approved === true || a.is_remediated === true);
+            }
+            else if (userRole === 'Начальник цеха') {
+                isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
+            }
+            else if (userRole === 'Назначенное лицо') {
+                isVisible = (a.assigned_to === userId) || 
+                            (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
+            }
+            else {
+                isVisible = true; 
+            }
+
+            const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
+            let matchesStatus = true;
+            if (statusFilter === 'signed') matchesStatus = a.is_fully_signed;
+            else if (statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
+            else if (statusFilter === 'remediated') matchesStatus = a.is_remediated;
+
+            return isVisible && matchesSearch && matchesStatus;
+        });
+
+        // --- СОРТИРОВКА ---
+        filtered.sort((a, b) => {
+            if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
+                return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
+            } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
+                let dateA = new Date(a.created_at).getTime();
+                let dateB = new Date(b.created_at).getTime();
+                return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
+            }
+            return 0;
+        });
+
+        // --- ОТРИСОВКА ---
+        renderTable(filtered);
     }
 
-    data.forEach((act, index) => {
-        act.seqNumber = data.length - index;
-        act.displayId = `${act.seqNumber}/11`;
-    });
+    function renderTable(filtered) {
+        const actsTable = document.getElementById('actsTable');
+        if (!actsTable) return;
 
-    const term = (document.getElementById('actSearch')?.value || "").toLowerCase();
-    const statusFilter = (document.getElementById('statusFilter')?.value || 'all');
-
-    let filtered = data.filter(a => {
-        let isVisible = false;
-        
-        // Безопасно берем данные, даже если они null в базе
-        const userDept = window.currentUser.department || "";
-        const userRole = window.currentUser.role || "";
-        const userId = window.currentUser.id || "";
-
-        // Тот самый "защищенный" includes
-        const isWorker = !userDept.includes('ПБ') && !userDept.includes('ОТ');
-
-        if (userRole === 'Начальник отдела') {
-            isVisible = (a.created_by_dept === userDept);
-        } 
-        else if (userRole === 'Начальник управления') {
-            isVisible = (a.is_dept_approved === true || a.is_remediated === true);
-        }
-        else if (userRole === 'Начальник цеха') {
-            isVisible = (a.target_shop === userDept && a.is_fully_signed === true);
-        }
-        else if (userRole === 'Назначенное лицо') {
-            isVisible = (a.assigned_to === userId) || 
-                        (isWorker && a.target_shop === userDept && a.is_fully_signed === true);
-        }
-        else {
-            isVisible = true; 
-        }
-
-        const matchesSearch = ((a.target_shop || "") + (a.violation_desc || "")).toLowerCase().includes(term);
-        
-        let matchesStatus = true;
-        if (statusFilter === 'signed') matchesStatus = a.is_fully_signed;
-        else if (statusFilter === 'pending') matchesStatus = !a.is_fully_signed;
-        else if (statusFilter === 'remediated') matchesStatus = a.is_remediated;
-
-        return isVisible && matchesSearch && matchesStatus;
-    });
-
-    // --- СОРТИРОВКА И ОТРИСОВКА ---
-    // (Используем тот же код, что и раньше, он стабилен)
-    renderTable(filtered);
-}
-
-// Вспомогательная функция отрисовки, чтобы не загромождать loadActs
-function renderTable(filtered) {
-    const actsTable = document.getElementById('actsTable');
-    if (!actsTable) return;
-
-    actsTable.innerHTML = filtered.map(a => {
-        let statusBadge = '';
-        if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
-        else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
-        else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
-        else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
-
-        let photoUrls = [];
-        try { photoUrls = JSON.parse(a.image_urls || '[]'); } catch(e) { photoUrls = []; }
-        const photoUrl = photoUrls[0] || '';
-
-        return `
-            <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
-                <td style="padding:10px 5px; min-width:80px;">
-                    <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
-                    <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
-                </td>
-                <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
-                <td>
-                    <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
-                         onerror="this.style.display='none'">
-                </td>
-                <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
-                <td align="center">${statusBadge}</td>
-            </tr>`;
-    }).join('');
-}
-
-    // --- СОРТИРОВКА ---
-    filtered.sort((a, b) => {
-        if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
-            return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
-        } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
-            let dateA = new Date(a.created_at).getTime();
-            let dateB = new Date(b.created_at).getTime();
-            return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
-        }
-        return 0;
-    });
-
-    // --- ОТРИСОВКА В ТАБЛИЦУ ---
-    const actsTable = document.getElementById('actsTable');
-    if (actsTable) {
         actsTable.innerHTML = filtered.map(a => {
             let statusBadge = '';
             if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
@@ -552,59 +506,14 @@ function renderTable(filtered) {
                 </tr>`;
         }).join('');
     }
-}
 
-    // --- СОРТИРОВКА (Теперь внутри функции) ---
-    filtered.sort((a, b) => {
-        if (typeof sortColumn !== 'undefined' && sortColumn === 'seqNumber') {
-            return (typeof sortDescending !== 'undefined' && sortDescending) ? b.seqNumber - a.seqNumber : a.seqNumber - b.seqNumber;
-        } else if (typeof sortColumn !== 'undefined' && sortColumn === 'created_at') {
-            let dateA = new Date(a.created_at).getTime();
-            let dateB = new Date(b.created_at).getTime();
-            return (typeof sortDescending !== 'undefined' && sortDescending) ? dateB - dateA : dateA - dateB;
-        }
-        return 0;
-    });
-
-    // --- ОТРИСОВКА ---
-    const actsTable = document.getElementById('actsTable');
-    if (actsTable) {
-        actsTable.innerHTML = filtered.map(a => {
-            let statusBadge = '';
-            if (a.is_remediated) statusBadge = '<span class="badge bg-remediated">ОТЧЕТ</span>';
-            else if (a.is_fully_signed) statusBadge = '<span class="badge bg-done">ПОДПИСАНО</span>';
-            else if (a.is_dept_approved) statusBadge = '<span class="badge bg-sign">УПРАВЛЕНИЕ</span>';
-            else statusBadge = '<span class="badge bg-wait">ОТДЕЛ</span>';
-
-            let photoUrls = [];
-            try { 
-                photoUrls = JSON.parse(a.image_urls || '[]'); 
-            } catch(e) { 
-                photoUrls = []; 
-            }
-            const photoUrl = photoUrls[0] || '';
-
-            return `
-                <tr onclick="openActById('${a.id}')" style="border-bottom:1px solid #eee; cursor:pointer;">
-                    <td style="padding:10px 5px; min-width:80px;">
-                        <div style="font-weight:bold; color:#0056b3; font-size:14px;">№ ${a.displayId}</div> 
-                        <div style="font-size:10px; color:#666;">${new Date(a.created_at).toLocaleDateString()}</div>
-                    </td>
-                    <td><b style="font-size:12px;">${a.target_shop || '—'}</b></td>
-                    <td>
-                        <img src="${photoUrl}" style="width:50px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" 
-                             onerror="this.style.display='none'">
-                    </td>
-                    <td style="font-size:11px; color:#333;">${(a.violation_desc || "").substring(0,45)}...</td>
-                    <td align="center">${statusBadge}</td>
-                </tr>`;
-        }).join('');
+    async function openActById(id) {
+        const { data, error } = await _supabase.from('acts').select('*').eq('id', id).single();
+        if (data) openAct(data);
     }
-} // <--- Вот теперь эта скобка ЗАКРЫВАЕТ ВСЁ ПРАВИЛЬНО
 
-   async function openAct(act) {
+    async function openAct(act) {
         document.getElementById('actModal').style.display = 'block';
-        
         const d = new Date(act.created_at).toLocaleDateString();
         const simpleNum = act.seqNumber || 1;
         const fullNumber = `${simpleNum}/11`;
@@ -619,7 +528,7 @@ function renderTable(filtered) {
         const violation = (act.violation_desc || "").replace(/Статья:.*\n/, "").replace("Нарушение:", "").trim();
         let law = act.violation_article || 'ППР РФ';
         if (law.includes("ППР РФ") && !law.includes("1479")) law += " утв. Постановлением Правительства РФ от 16 сентября 2020 г. №1479";
-
+        
         const action = act.action_required || 'Устранить нарушение';
         const deadline = act.deadline || '—';
         const responsible = act.responsible_person || 'Начальник цеха';
@@ -746,7 +655,6 @@ function renderTable(filtered) {
         if (reports && reports.length > 0) {
             tableHtml = `<div style="background:#f0fff4; padding:15px; border:1px solid #c6f6d5; border-radius:8px; margin-top:15px;">
                         <h4 style="margin:0 0 15px 0; color: #22543d;">📋 ДОПОЛНИТЕЛЬНЫЕ ФОТО/ОТЧЕТЫ</h4>`;
-            
             tableHtml += reports.map(r => {
                 let rPhotos = [];
                 try {
@@ -767,6 +675,7 @@ function renderTable(filtered) {
         }
         reportBox.innerHTML = actHtml + tableHtml;
     }
+
     function renderActionButtons(act) {
         const btnBox = document.getElementById('actionButtons');
         btnBox.innerHTML = "";
@@ -783,7 +692,6 @@ function renderTable(filtered) {
         if ((currentUser.role === 'Начальник отдела' || currentUser.role === 'Начальник цеха') && act.target_shop === currentUser.department && act.is_fully_signed) {
             const assignedUser = allUsers.find(u => u.id === act.assigned_to);
             const nameText = assignedUser ? `<b style="color:#2b6cb0;">${assignedUser.username}</b>` : `<span style="color:#e53e3e;">не назначен</span>`;
-            
             const extraInfo = (act.worker_full_name || act.worker_phone) 
                 ? `<div style="margin-top:5px; font-size:12px; color:#555;">${act.worker_full_name || ''} ${act.worker_phone ? '📞 ' + act.worker_phone : ''}</div>` 
                 : '';
@@ -801,7 +709,6 @@ function renderTable(filtered) {
     }
         
     function showAssignUI(actId) {
-        // ФИЛЬТРАЦИЯ ИСПОЛНИТЕЛЕЙ ДЛЯ ВЫПАДАЮЩЕГО СПИСКА ВНУТРИ АКТА
         let allowedUsers = allUsers.filter(u => u.role === 'Назначенное лицо');
         if (currentUser.role === 'Начальник цеха') {
             allowedUsers = allowedUsers.filter(u => u.department === currentUser.department);
@@ -814,8 +721,8 @@ function renderTable(filtered) {
                 <option value="">-- Выберите исполнителя --</option>
                 ${allowedUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
             </select>
-            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
-            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly title="Данные редактируются в меню 'Данные исполнителей'">
+            <input type="text" id="tempUserName" placeholder="ФИО подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly>
+            <input type="text" id="tempUserPhone" placeholder="Телефон подтянется из базы" style="padding:5px; width:100%; margin-bottom:5px; background:#e9ecef;" readonly>
             <button id="tempAssignBtn" style="padding:8px; width:100%; background:#28a745; color:white; border:none; cursor:pointer; border-radius:5px; font-weight:bold;">СОХРАНИТЬ ДАННЫЕ</button>`;
         document.getElementById('actionButtons').appendChild(assignDiv);
         
@@ -857,10 +764,10 @@ function renderTable(filtered) {
     function closeAct() { document.getElementById('actModal').style.display = 'none'; }
     
     async function signOut() { 
-        await _supabase.auth.signOut(); 
+        await _supabase.auth.signOut();
         localStorage.removeItem('userProfile'); 
         location.reload(); 
     }
-</script> 
+</script>
 </body>
 </html>
